@@ -3,35 +3,43 @@ use std::rc::Rc;
 pub struct Token {
     pub kind: TokenKind,
     pub literal: Rc<str>,
-    pub span: Span,
 }
 
 impl Token {
-    pub fn new(literal: impl Into<String>, span: Span) -> Self {
-        let literal: String = literal.into();
+    pub fn special(literal: char) -> Option<Self> {
+        Some(Self {
+            literal: literal.to_string().into(),
+            kind: TokenKind::special(literal)?,
+        })
+    }
+
+    pub fn word(literal: impl AsRef<str>) -> Option<Self> {
+        Some(Self {
+            literal: literal.as_ref().into(),
+            kind: TokenKind::word(literal)?,
+        })
+    }
+
+    pub fn illegal(literal: char) -> Self {
         Self {
-            span,
-            literal: literal.clone().into(),
-            kind: literal.into(),
+            literal: literal.to_string().into(),
+            kind: TokenKind::Illegal,
         }
     }
 }
 
-// This feels like a fine default. Maybe change.
-type Int = i32;
-
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum TokenKind {
     Illegal,
 
-    Ident(Rc<str>),
-    Int(Int),
+    Ident,
+    Int,
 
     Assign,
     Plus,
 
     Comma,
-    Semicolon,
+    Semi,
 
     LParen,
     RParen,
@@ -42,38 +50,30 @@ pub enum TokenKind {
     Let,
 }
 
-impl<T: Into<String>> From<T> for TokenKind {
-    fn from(value: T) -> Self {
-        let value: String = value.into();
-
-        if let Ok(i) = value.parse::<Int>() {
-            return Self::Int(i);
-        }
-        match value.as_str() {
-            "fn" => Self::Fn,
-            "let" => Self::Let,
-            "=" => Self::Assign,
-            "+" => Self::Plus,
-            "," => Self::Comma,
-            ";" => Self::Semicolon,
-            "(" => Self::LParen,
-            ")" => Self::RParen,
-            "{" => Self::LBrace,
-            "}" => Self::RBrace,
-            _ => Self::Ident(value.into()),
+impl TokenKind {
+    pub fn special(literal: char) -> Option<Self> {
+        match literal {
+            '=' => Some(Self::Assign),
+            '+' => Some(Self::Plus),
+            ',' => Some(Self::Comma),
+            ';' => Some(Self::Semi),
+            '(' => Some(Self::LParen),
+            ')' => Some(Self::RParen),
+            '{' => Some(Self::LBrace),
+            '}' => Some(Self::RBrace),
+            _ => None,
         }
     }
-}
 
-/// A span of text in a string, including both the start and end locations.
-pub struct Span {
-    pub start: Location,
-    pub end: Location,
-}
-
-/// The location of a particular character in a string. Line and column numbers begin at 1.
-#[derive(Clone)]
-pub struct Location {
-    pub line: usize,
-    pub column: usize,
+    pub fn word(literal: impl AsRef<str>) -> Option<Self> {
+        let literal = literal.as_ref();
+        if Self::special(literal.chars().next()?).is_some() {
+            return None;
+        }
+        match literal {
+            "let" => Some(Self::Let),
+            "fn" => Some(Self::Fn),
+            _ => Some(Self::Ident),
+        }
+    }
 }

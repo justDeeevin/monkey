@@ -1,15 +1,13 @@
 use std::rc::Rc;
 
 mod test;
-use crate::token::{Location, Span, Token};
+use crate::token::{Token, TokenKind};
 
 pub struct Lexer {
     input: Rc<str>,
     position: usize,
-    line: usize,
-    column: usize,
     read_position: usize,
-    ch: char,
+    ch: Option<char>,
 }
 
 impl Lexer {
@@ -18,24 +16,14 @@ impl Lexer {
         Self {
             input: input.into(),
             position: 0,
-            line: 1,
-            column: 2,
             read_position: 1,
-            ch: input.chars().next().unwrap_or('\0'),
+            ch: input.chars().next(),
         }
     }
 
     fn read_char(&mut self) {
-        if self.read_position >= self.input.len() {
-            self.ch = '\0';
-        } else {
-            self.ch = self.input.chars().nth(self.read_position).unwrap();
-        }
+        self.ch = self.input.chars().nth(self.read_position);
         self.position = self.read_position;
-        if self.ch == '\n' {
-            self.line += 1;
-            self.column = 1;
-        }
         self.read_position += 1;
     }
 }
@@ -44,22 +32,42 @@ impl Iterator for Lexer {
     type Item = Token;
 
     fn next(&mut self) -> Option<Self::Item> {
-        if self.ch == '\0' {
-            return None;
+        while self.ch.unwrap_or('\0').is_whitespace() {
+            self.read_char();
         }
+        let ch = self.ch?;
 
-        let loc = Location {
-            line: self.line,
-            column: self.column,
+        let (out, read) = if ch.is_ascii_digit() {
+            let position = self.position;
+            while self.ch.unwrap_or('\0').is_ascii_digit() {
+                self.read_char();
+            }
+            (
+                Token {
+                    kind: TokenKind::Int,
+                    literal: self.input[position..self.position].into(),
+                },
+                true,
+            )
+        } else if ch.is_alphabetic() || ch == '_' {
+            let position = self.position;
+            while self.ch.unwrap_or('\0').is_alphanumeric() || self.ch.unwrap_or('\0') == '_' {
+                self.read_char();
+            }
+            (
+                Token::word(&self.input[position..self.position]).unwrap(),
+                true,
+            )
+        } else if let Some(special) = Token::special(ch) {
+            (special, false)
+        } else {
+            (Token::illegal(ch), false)
         };
 
-        let lit = self.ch.to_string();
+        if !read {
+            self.read_char();
+        }
 
-        self.read_char();
-
-        Some(Token::new(lit, Span {
-            start: loc.clone(),
-            end: loc,
-        }))
+        Some(out)
     }
 }
