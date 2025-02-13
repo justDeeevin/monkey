@@ -1,29 +1,26 @@
 use std::rc::Rc;
 
+#[derive(Debug)]
 pub struct Token {
     pub kind: TokenKind,
     pub literal: Rc<str>,
 }
 
 impl Token {
-    pub fn special(literal: char) -> Option<Self> {
-        Some(Self {
-            literal: literal.to_string().into(),
-            kind: TokenKind::special(literal)?,
-        })
+    pub fn special(literal: char, peek: char) -> Self {
+        let kind = TokenKind::special(literal, peek);
+        let literal = if kind.is_double() {
+            format!("{literal}{peek}").into()
+        } else {
+            literal.to_string().into()
+        };
+        Self { literal, kind }
     }
 
-    pub fn word(literal: impl AsRef<str>) -> Option<Self> {
-        Some(Self {
-            literal: literal.as_ref().into(),
-            kind: TokenKind::word(literal)?,
-        })
-    }
-
-    pub fn illegal(literal: char) -> Self {
+    pub fn word(literal: impl AsRef<str>) -> Self {
         Self {
-            literal: literal.to_string().into(),
-            kind: TokenKind::Illegal,
+            literal: literal.as_ref().into(),
+            kind: TokenKind::word(literal),
         }
     }
 }
@@ -34,9 +31,20 @@ pub enum TokenKind {
 
     Ident,
     Int,
+    True,
+    False,
 
     Assign,
     Plus,
+    Minus,
+    Not,
+    Mult,
+    Div,
+
+    Equal,
+    NotEqual,
+    Less,
+    Greater,
 
     Comma,
     Semi,
@@ -48,32 +56,53 @@ pub enum TokenKind {
 
     Fn,
     Let,
+    If,
+    Else,
+    Return,
 }
 
 impl TokenKind {
-    pub fn special(literal: char) -> Option<Self> {
+    pub fn special(literal: char, peek: char) -> Self {
         match literal {
-            '=' => Some(Self::Assign),
-            '+' => Some(Self::Plus),
-            ',' => Some(Self::Comma),
-            ';' => Some(Self::Semi),
-            '(' => Some(Self::LParen),
-            ')' => Some(Self::RParen),
-            '{' => Some(Self::LBrace),
-            '}' => Some(Self::RBrace),
-            _ => None,
+            '=' => match peek {
+                '=' => Self::Equal,
+                _ => Self::Assign,
+            },
+            '+' => Self::Plus,
+            ',' => Self::Comma,
+            ';' => Self::Semi,
+            '(' => Self::LParen,
+            ')' => Self::RParen,
+            '{' => Self::LBrace,
+            '}' => Self::RBrace,
+            '-' => Self::Minus,
+            '!' => match peek {
+                '=' => Self::NotEqual,
+                _ => Self::Not,
+            },
+            '*' => Self::Mult,
+            '/' => Self::Div,
+            '<' => Self::Less,
+            '>' => Self::Greater,
+            _ => Self::Illegal,
         }
     }
 
-    pub fn word(literal: impl AsRef<str>) -> Option<Self> {
+    pub fn is_double(&self) -> bool {
+        matches!(self, Self::Equal | Self::NotEqual)
+    }
+
+    pub fn word(literal: impl AsRef<str>) -> Self {
         let literal = literal.as_ref();
-        if Self::special(literal.chars().next()?).is_some() {
-            return None;
-        }
         match literal {
-            "let" => Some(Self::Let),
-            "fn" => Some(Self::Fn),
-            _ => Some(Self::Ident),
+            "let" => Self::Let,
+            "fn" => Self::Fn,
+            "if" => Self::If,
+            "else" => Self::Else,
+            "return" => Self::Return,
+            "true" => Self::True,
+            "false" => Self::False,
+            _ => Self::Ident,
         }
     }
 }

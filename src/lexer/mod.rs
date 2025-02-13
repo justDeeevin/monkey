@@ -26,6 +26,10 @@ impl Lexer {
         self.position = self.read_position;
         self.read_position += 1;
     }
+
+    fn peek(&mut self) -> Option<char> {
+        self.input.chars().nth(self.read_position)
+    }
 }
 
 impl Iterator for Lexer {
@@ -54,14 +58,13 @@ impl Iterator for Lexer {
             while self.ch.unwrap_or('\0').is_alphanumeric() || self.ch.unwrap_or('\0') == '_' {
                 self.read_char();
             }
-            (
-                Token::word(&self.input[position..self.position]).unwrap(),
-                true,
-            )
-        } else if let Some(special) = Token::special(ch) {
-            (special, false)
+            (Token::word(&self.input[position..self.position]), true)
         } else {
-            (Token::illegal(ch), false)
+            let tok = Token::special(ch, self.peek().unwrap_or('\0'));
+            if tok.kind.is_double() {
+                self.read_char();
+            }
+            (tok, false)
         };
 
         if !read {
