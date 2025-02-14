@@ -1,7 +1,8 @@
+mod ast;
 mod lexer;
+mod parser;
 mod token;
 
-use lexer::Lexer;
 use rustyline::error::ReadlineError;
 
 fn main() {
@@ -10,7 +11,6 @@ fn main() {
         match rl.readline(">> ") {
             Ok(line) => {
                 let _ = rl.add_history_entry(&line);
-                dbg!(Lexer::new(line).collect::<Vec<_>>());
             }
             Err(ReadlineError::Interrupted) => {
                 println!("CTRL-C");

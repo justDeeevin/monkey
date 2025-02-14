@@ -105,8 +105,7 @@ fn test_next() {
 
     let lexer = Lexer::new(input);
 
-    for (item, ((kind, literal), token)) in tests.iter().zip(lexer).enumerate() {
-        dbg!(item);
+    for ((kind, literal), token) in tests.iter().zip(lexer) {
         assert_eq!(&token.kind, kind);
         assert_eq!(token.literal, (*literal).into());
     }

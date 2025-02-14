@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{fmt::Display, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub struct Token {
@@ -21,6 +21,22 @@ impl Token {
         Self {
             literal: literal.as_ref().into(),
             kind: TokenKind::word(literal),
+        }
+    }
+}
+
+impl Display for Token {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if self.kind.is_keyword() {
+            write!(f, "keyword \"{}\"", self.kind)
+        } else if self.kind.is_operator() {
+            write!(f, "operator \"{}\"", self.kind)
+        } else if self.kind.is_literal() {
+            write!(f, "literal \"{}\"", self.literal)
+        } else if self.kind == TokenKind::Ident {
+            write!(f, "identifier \"{}\"", self.literal)
+        } else {
+            self.kind.fmt(f)
         }
     }
 }
@@ -92,6 +108,33 @@ impl TokenKind {
         matches!(self, Self::Equal | Self::NotEqual)
     }
 
+    pub fn is_keyword(&self) -> bool {
+        matches!(
+            self,
+            Self::Let | Self::Fn | Self::If | Self::Else | Self::Return
+        )
+    }
+
+    pub fn is_literal(&self) -> bool {
+        matches!(self, Self::True | Self::False | Self::Int)
+    }
+
+    pub fn is_operator(&self) -> bool {
+        matches!(
+            self,
+            Self::Plus
+                | Self::Minus
+                | Self::Mult
+                | Self::Div
+                | Self::Assign
+                | Self::Equal
+                | Self::NotEqual
+                | Self::Less
+                | Self::Greater
+                | Self::Not
+        )
+    }
+
     pub fn word(literal: impl AsRef<str>) -> Self {
         let literal = literal.as_ref();
         match literal {
@@ -104,5 +147,45 @@ impl TokenKind {
             "false" => Self::False,
             _ => Self::Ident,
         }
+    }
+}
+
+impl Display for TokenKind {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let name = match self {
+            Self::Let => "let",
+            Self::Fn => "fn",
+            Self::If => "if",
+            Self::Else => "else",
+            Self::Return => "return",
+
+            Self::True => "true",
+            Self::False => "false",
+            Self::Int => "integer",
+
+            Self::Ident => "identifier",
+
+            Self::Equal => "==",
+            Self::NotEqual => "!=",
+            Self::Less => "less than",
+            Self::Greater => "greater than",
+            Self::Not => "not",
+            Self::Plus => "+",
+            Self::Minus => "-",
+            Self::Mult => "*",
+            Self::Div => "/",
+            Self::Assign => "assign",
+
+            Self::LParen => "open parenthesis",
+            Self::RParen => "close parenthesis",
+            Self::LBrace => "open brace",
+            Self::RBrace => "close brace",
+
+            Self::Comma => "comma",
+
+            Self::Illegal => "illegal",
+            Self::Semi => "semicolon",
+        };
+        write!(f, "{name}")
     }
 }
