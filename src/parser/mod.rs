@@ -38,25 +38,23 @@ impl Parser {
         self.peek = self.lexer.next();
     }
 
-    fn parse_statement(&mut self) -> Result<impl Statement + use<>, Error> {
-        match self.current.as_ref().ok_or(Error::Eof)?.kind {
+    fn parse_statement(&mut self) -> Result<impl Statement + use<>, ParseError> {
+        match self.current.as_ref().ok_or(ParseError::Eof)?.kind {
             Let => self.parse_let_statement(),
             _ => todo!(),
         }
     }
 
-    fn parse_let_statement(&mut self) -> Result<LetStatement<impl Expression + use<>>, Error> {
-        let token = self.current.clone().ok_or(Error::Eof)?;
+    fn parse_let_statement(&mut self) -> Result<LetStatement<impl Expression + use<>>, ParseError> {
+        let token = self.current.clone().ok_or(ParseError::Eof)?;
 
         self.expect_peek(Ident)?;
 
-        let name = Identifier::from_token(self.current.clone().ok_or(Error::Eof)?);
+        let name = Identifier::from_token(self.current.clone().ok_or(ParseError::Eof)?);
 
         self.expect_peek(Assign)?;
 
-        while self.current.as_ref().ok_or(Error::Eof)?.kind != Semi {
-            self.next_token();
-        }
+        self.skip_to_semi()?;
 
         Ok(LetStatement {
             name,
@@ -65,12 +63,20 @@ impl Parser {
         })
     }
 
-    fn expect_peek(&mut self, expected: TokenKind) -> Result<(), Error> {
+    fn skip_to_semi(&mut self) -> Result<(), ParseError> {
+        while self.current.as_ref().ok_or(ParseError::Eof)?.kind != Semi {
+            self.next_token();
+        }
+
+        Ok(())
+    }
+
+    fn expect_peek(&mut self, expected: TokenKind) -> Result<(), ParseError> {
         let Some(peek) = &self.peek else {
-            return Err(Error::Eof);
+            return Err(ParseError::Eof);
         };
         if peek.kind != expected {
-            return Err(Error::Unexpected {
+            return Err(ParseError::Unexpected {
                 given: peek.clone(),
                 expected,
             });
@@ -81,25 +87,52 @@ impl Parser {
 }
 
 impl FromStr for Program {
-    type Err = Error;
+    type Err = Vec<ParseError>;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parser = Parser::new(Lexer::new(s));
         let mut statements: Vec<Box<dyn Statement>> = Vec::new();
+        let mut errors = Vec::new();
 
         while parser.current.is_some() {
-            statements.push(Box::new(parser.parse_statement()?));
+            match parser.parse_statement() {
+                Ok(statement) => statements.push(Box::new(statement)),
+                Err(err) => {
+                    errors.push(err);
+                    if let Err(e) = parser.skip_to_semi() {
+                        errors.push(e);
+                    };
+                }
+            }
             parser.next_token();
         }
 
-        Ok(Program { statements })
+        if !errors.is_empty() {
+            Err(errors)
+        } else {
+            Ok(Program { statements })
+        }
     }
 }
 
 #[derive(Debug, thiserror::Error)]
-pub enum Error {
+pub enum ParseError {
     #[error("Unexpected token: {given} (expected {expected})")]
     Unexpected { given: Token, expected: TokenKind },
     #[error("Unexpected EOF")]
     Eof,
+}
+
+#[derive(Debug, thiserror::Error)]
+pub struct ProgramError {
+    errors: Vec<ParseError>,
+}
+
+impl std::fmt::Display for ProgramError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for error in &self.errors {
+            writeln!(f, "{error}")?;
+        }
+        Ok(())
+    }
 }
