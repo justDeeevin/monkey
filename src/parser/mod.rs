@@ -87,7 +87,7 @@ impl Parser {
 }
 
 impl FromStr for Program {
-    type Err = Vec<ParseError>;
+    type Err = ProgramError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
         let mut parser = Parser::new(Lexer::new(s));
@@ -108,7 +108,7 @@ impl FromStr for Program {
         }
 
         if !errors.is_empty() {
-            Err(errors)
+            Err(ProgramError::new(errors))
         } else {
             Ok(Program { statements })
         }
@@ -126,6 +126,12 @@ pub enum ParseError {
 #[derive(Debug, thiserror::Error)]
 pub struct ProgramError {
     errors: Vec<ParseError>,
+}
+
+impl ProgramError {
+    pub fn new(errors: Vec<ParseError>) -> Self {
+        Self { errors }
+    }
 }
 
 impl std::fmt::Display for ProgramError {

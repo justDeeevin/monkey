@@ -10,7 +10,12 @@ fn let_statements() {
         let foobar = 838383;
     "#;
 
-    let program = input.parse::<Program>().unwrap();
+    let program = match input.parse::<Program>() {
+        Ok(program) => program,
+        Err(e) => {
+            panic!("Failed to parse program: {e}");
+        }
+    };
 
     // Subtract 2 for the start and end newlines in the input
     assert_eq!(program.statements.len(), input.lines().count() - 2);
