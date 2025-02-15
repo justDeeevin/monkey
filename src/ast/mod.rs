@@ -72,8 +72,8 @@ impl Expression for Identifier {}
 
 #[derive(Debug)]
 pub struct ReturnStatement<E: Expression> {
-    token: Token,
-    value: E,
+    pub token: Token,
+    pub value: E,
 }
 
 impl<E: Expression> Node for ReturnStatement<E> {

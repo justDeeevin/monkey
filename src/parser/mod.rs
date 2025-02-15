@@ -4,7 +4,7 @@ use std::str::FromStr;
 
 use crate::{
     ast::{
-        Identifier, LetStatement, Program,
+        Identifier, LetStatement, Program, ReturnStatement,
         traits::{Expression, Statement},
     },
     lexer::Lexer,
@@ -38,11 +38,12 @@ impl Parser {
         self.peek = self.lexer.next();
     }
 
-    fn parse_statement(&mut self) -> Result<impl Statement + use<>, ParseError> {
-        match self.current.as_ref().ok_or(ParseError::Eof)?.kind {
-            Let => self.parse_let_statement(),
+    fn parse_statement(&mut self) -> Result<Box<dyn Statement>, ParseError> {
+        Ok(match self.current.as_ref().ok_or(ParseError::Eof)?.kind {
+            Let => Box::new(self.parse_let_statement()?),
+            Return => Box::new(self.parse_return_statement()?),
             _ => todo!(),
-        }
+        })
     }
 
     fn parse_let_statement(&mut self) -> Result<LetStatement<impl Expression + use<>>, ParseError> {
@@ -61,6 +62,19 @@ impl Parser {
             value: Identifier::new("foo"),
             token,
         })
+    }
+
+    fn parse_return_statement(
+        &mut self,
+    ) -> Result<ReturnStatement<impl Expression + use<>>, ParseError> {
+        let out = ReturnStatement {
+            token: self.current.clone().ok_or(ParseError::Eof)?,
+            value: Identifier::new("foo"),
+        };
+
+        self.skip_to_semi()?;
+
+        Ok(out)
     }
 
     fn skip_to_semi(&mut self) -> Result<(), ParseError> {
@@ -96,7 +110,7 @@ impl FromStr for Program {
 
         while parser.current.is_some() {
             match parser.parse_statement() {
-                Ok(statement) => statements.push(Box::new(statement)),
+                Ok(statement) => statements.push(statement),
                 Err(err) => {
                     errors.push(err);
                     if let Err(e) = parser.skip_to_semi() {

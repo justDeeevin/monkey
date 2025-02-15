@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use crate::ast::{Identifier, LetStatement, Program, traits::Node};
+use crate::ast::{Identifier, LetStatement, Program, ReturnStatement, traits::Node};
 
 #[test]
 fn let_statements() {
@@ -36,9 +36,24 @@ fn let_statements() {
 
 #[test]
 fn return_statements() {
-    // let input = r#"
-    //     return 5;
-    //     return 10;
-    //     return 993322;
-    // "#;
+    let input = r#"
+        return 5;
+        return 10;
+        return 993322;
+    "#;
+
+    let program = match input.parse::<Program>() {
+        Ok(program) => program,
+        Err(e) => {
+            panic!("Failed to parse program: {e}");
+        }
+    };
+
+    assert_eq!(program.statements.len(), input.lines().count() - 2);
+    for statement in program.statements {
+        let return_statement = statement
+            .downcast_ref::<ReturnStatement<Identifier>>()
+            .unwrap();
+        assert_eq!(return_statement.token_literal(), "return");
+    }
 }
