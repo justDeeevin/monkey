@@ -68,5 +68,20 @@ impl Node for Identifier {
         &self.token.literal
     }
 }
-
 impl Expression for Identifier {}
+
+#[derive(Debug)]
+pub struct ReturnStatement<E: Expression> {
+    token: Token,
+    value: E,
+}
+
+impl<E: Expression> Node for ReturnStatement<E> {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+#[cfg(test)]
+impl<E: Expression + 'static> Statement for ReturnStatement<E> {}
+#[cfg(not(test))]
+impl<E: Expression> Statement for ReturnStatement<E> {}

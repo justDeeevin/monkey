@@ -33,3 +33,12 @@ fn let_statements() {
         assert_eq!(let_statement.name.token_literal(), *ident);
     }
 }
+
+#[test]
+fn return_statements() {
+    // let input = r#"
+    //     return 5;
+    //     return 10;
+    //     return 993322;
+    // "#;
+}
