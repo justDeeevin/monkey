@@ -31,7 +31,10 @@ impl<E: Expression> Node for LetStatement<E> {
         &self.token.literal
     }
 }
+#[cfg(test)]
 impl<E: Expression + 'static> Statement for LetStatement<E> {}
+#[cfg(not(test))]
+impl<E: Expression> Statement for LetStatement<E> {}
 
 #[derive(Debug)]
 pub struct Identifier {
