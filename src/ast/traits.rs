@@ -9,4 +9,9 @@ pub trait Statement: Node + downcast_rs::Downcast {}
 #[cfg(test)]
 downcast_rs::impl_downcast!(Statement);
 
+#[cfg(not(test))]
 pub trait Expression: Node {}
+#[cfg(test)]
+pub trait Expression: Node + downcast_rs::Downcast {}
+#[cfg(test)]
+downcast_rs::impl_downcast!(Expression);

@@ -1,13 +1,22 @@
 pub mod traits;
 use traits::*;
 
-use crate::token::Token;
+use crate::token::{Token, TokenKind};
 
 use std::{fmt::Display, rc::Rc};
+
+// This seems good for now.
+pub type Integer = i64;
 
 #[derive(Debug)]
 pub struct Program {
     pub statements: Vec<Box<dyn Statement>>,
+}
+
+impl Program {
+    pub fn new(statements: Vec<Box<dyn Statement>>) -> Self {
+        Self { statements }
+    }
 }
 
 impl Display for Program {
@@ -106,3 +115,61 @@ impl Node for ReturnStatement {
     }
 }
 impl Statement for ReturnStatement {}
+
+#[derive(Debug)]
+pub struct ExpressionStatement {
+    pub token: Token,
+    pub expression: Box<dyn Expression>,
+}
+
+impl Display for ExpressionStatement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{};", self.expression)
+    }
+}
+
+impl Node for ExpressionStatement {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+impl Statement for ExpressionStatement {}
+
+#[derive(Debug)]
+pub struct IntegerLiteral {
+    token: Token,
+    value: Integer,
+}
+
+impl IntegerLiteral {
+    pub fn new(value: Integer) -> Self {
+        let token = Token {
+            kind: TokenKind::Int,
+            literal: value.to_string().into(),
+        };
+        Self { token, value }
+    }
+
+    pub fn value(&self) -> Integer {
+        self.value
+    }
+
+    pub fn from_token(token: Token) -> Result<Self, std::num::ParseIntError> {
+        let value = token.literal.parse()?;
+        Ok(Self { token, value })
+    }
+}
+
+impl Display for IntegerLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl Node for IntegerLiteral {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+
+impl Expression for IntegerLiteral {}
