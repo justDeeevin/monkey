@@ -46,7 +46,7 @@ impl Parser {
         })
     }
 
-    fn parse_let_statement(&mut self) -> Result<LetStatement<impl Expression + use<>>, ParseError> {
+    fn parse_let_statement(&mut self) -> Result<LetStatement, ParseError> {
         let token = self.current.clone().ok_or(ParseError::Eof)?;
 
         self.expect_peek(Ident)?;
@@ -59,17 +59,15 @@ impl Parser {
 
         Ok(LetStatement {
             name,
-            value: Identifier::new("foo"),
+            value: Box::new(Identifier::new("foo")),
             token,
         })
     }
 
-    fn parse_return_statement(
-        &mut self,
-    ) -> Result<ReturnStatement<impl Expression + use<>>, ParseError> {
+    fn parse_return_statement(&mut self) -> Result<ReturnStatement, ParseError> {
         let out = ReturnStatement {
             token: self.current.clone().ok_or(ParseError::Eof)?,
-            value: Identifier::new("foo"),
+            value: Box::new(Identifier::new("foo")),
         };
 
         self.skip_to_semi()?;

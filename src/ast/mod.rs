@@ -20,21 +20,18 @@ impl Node for Program {
 }
 
 #[derive(Debug)]
-pub struct LetStatement<E: Expression> {
+pub struct LetStatement {
     pub token: Token,
     pub name: Identifier,
-    pub value: E,
+    pub value: Box<dyn Expression>,
 }
 
-impl<E: Expression> Node for LetStatement<E> {
+impl Node for LetStatement {
     fn token_literal(&self) -> &str {
         &self.token.literal
     }
 }
-#[cfg(test)]
-impl<E: Expression + 'static> Statement for LetStatement<E> {}
-#[cfg(not(test))]
-impl<E: Expression> Statement for LetStatement<E> {}
+impl Statement for LetStatement {}
 
 #[derive(Debug)]
 pub struct Identifier {
@@ -71,17 +68,14 @@ impl Node for Identifier {
 impl Expression for Identifier {}
 
 #[derive(Debug)]
-pub struct ReturnStatement<E: Expression> {
+pub struct ReturnStatement {
     pub token: Token,
-    pub value: E,
+    pub value: Box<dyn Expression>,
 }
 
-impl<E: Expression> Node for ReturnStatement<E> {
+impl Node for ReturnStatement {
     fn token_literal(&self) -> &str {
         &self.token.literal
     }
 }
-#[cfg(test)]
-impl<E: Expression + 'static> Statement for ReturnStatement<E> {}
-#[cfg(not(test))]
-impl<E: Expression> Statement for ReturnStatement<E> {}
+impl Statement for ReturnStatement {}
