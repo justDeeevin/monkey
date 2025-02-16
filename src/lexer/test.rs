@@ -4,7 +4,7 @@ use super::Lexer;
 use crate::token::TokenKind::*;
 
 #[test]
-fn test_next() {
+fn lex() {
     let input = r#"
         let five = 5;
         let ten = 10;
