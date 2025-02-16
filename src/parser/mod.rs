@@ -4,7 +4,8 @@ use std::str::FromStr;
 
 use crate::{
     ast::{
-        ExpressionStatement, Identifier, IntegerLiteral, LetStatement, Program, ReturnStatement,
+        ExpressionStatement, Identifier, InfixExpression, IntegerLiteral, LetStatement,
+        PrefixExpression, Program, ReturnStatement,
         traits::{Expression, Statement},
     },
     lexer::Lexer,
@@ -38,28 +39,37 @@ impl Parser {
         self.peek = self.lexer.next();
     }
 
+    fn current_clone(&self) -> Result<Token, ParseError> {
+        self.current.clone().ok_or(ParseError::Eof)
+    }
+
+    fn current_ref(&self) -> Result<&Token, ParseError> {
+        self.current.as_ref().ok_or(ParseError::Eof)
+    }
+
+    fn peek_clone(&self) -> Result<Token, ParseError> {
+        self.peek.clone().ok_or(ParseError::Eof)
+    }
+
+    fn peek_ref(&self) -> Result<&Token, ParseError> {
+        self.peek.as_ref().ok_or(ParseError::Eof)
+    }
+
     fn parse_statement(&mut self) -> Result<Box<dyn Statement>, ParseError> {
-        let current = self.current.clone().ok_or(ParseError::Eof)?;
+        let current = self.current_clone()?;
         Ok(match current.kind {
             Let => Box::new(self.parse_let_statement()?),
             Return => Box::new(self.parse_return_statement()?),
-            Ident | Int | True | False | Minus | LParen | If => {
-                Box::new(self.parse_expression_statement()?)
-            }
-            _ => {
-                return Err(ParseError::NoStatement {
-                    given: current.clone(),
-                });
-            }
+            _ => Box::new(self.parse_expression_statement()?),
         })
     }
 
     fn parse_expression_statement(&mut self) -> Result<ExpressionStatement, ParseError> {
         let out = ExpressionStatement {
-            token: self.current.clone().ok_or(ParseError::Eof)?,
+            token: self.current_clone()?,
             expression: self.parse_expression(ExpressionKind::Lowest)?,
         };
-        if self.peek.as_ref().ok_or(ParseError::Eof)?.kind == Semi {
+        if self.peek_ref()?.kind == Semi {
             self.next_token();
         }
         Ok(out)
@@ -69,19 +79,24 @@ impl Parser {
         &mut self,
         kind: ExpressionKind,
     ) -> Result<Box<dyn Expression>, ParseError> {
-        if let Some(expr) = self.parse_prefix()? {
-            return Ok(expr);
+        let Some(mut left) = self.parse_prefix()? else {
+            return Err(ParseError::NoPrefix);
+        };
+
+        while self.peek_ref()?.kind != Semi && kind < self.peek_ref()?.kind.into() {
+            self.next_token();
+            left = self.parse_infix(left)?;
         }
 
-        todo!()
+        Ok(left)
     }
 
     fn parse_let_statement(&mut self) -> Result<LetStatement, ParseError> {
-        let token = self.current.clone().ok_or(ParseError::Eof)?;
+        let token = self.current_clone()?;
 
         self.expect_peek(Ident)?;
 
-        let name = Identifier::from_token(self.current.clone().ok_or(ParseError::Eof)?);
+        let name = Identifier::from_token(self.current_clone()?);
 
         self.expect_peek(Assign)?;
 
@@ -96,7 +111,7 @@ impl Parser {
 
     fn parse_return_statement(&mut self) -> Result<ReturnStatement, ParseError> {
         let out = ReturnStatement {
-            token: self.current.clone().ok_or(ParseError::Eof)?,
+            token: self.current_clone()?,
             value: Box::new(Identifier::new("foo")),
         };
 
@@ -106,7 +121,7 @@ impl Parser {
     }
 
     fn skip_to_semi(&mut self) -> Result<(), ParseError> {
-        while self.current.as_ref().ok_or(ParseError::Eof)?.kind != Semi {
+        while self.current_ref()?.kind != Semi {
             self.next_token();
         }
 
@@ -128,16 +143,37 @@ impl Parser {
     }
 
     fn parse_prefix(&mut self) -> Result<Option<Box<dyn Expression>>, ParseError> {
-        let current = self.current.clone().ok_or(ParseError::Eof)?;
+        let current = self.current_clone()?;
         Ok(match current.kind {
             Ident => Some(Box::new(Identifier::from_token(current))),
             Int => Some(Box::new(IntegerLiteral::from_token(current)?)),
-            _ => todo!(),
+            Not | Minus => {
+                self.next_token();
+                Some(Box::new(PrefixExpression {
+                    operator: current.kind.to_string().chars().next().unwrap(),
+                    token: current,
+                    right: self.parse_expression(ExpressionKind::Prefix)?,
+                }))
+            }
+            _ => None,
         })
     }
 
-    fn parse_infix(&mut self, left: &dyn Expression) -> Result<Box<dyn Expression>, ParseError> {
-        todo!()
+    fn parse_infix(
+        &mut self,
+        left: Box<dyn Expression>,
+    ) -> Result<Box<dyn Expression>, ParseError> {
+        let current = self.current_clone()?;
+        let kind = ExpressionKind::from(current.kind);
+        self.next_token();
+        let right = self.parse_expression(kind)?;
+
+        Ok(Box::new(InfixExpression {
+            operator: current.literal.clone(),
+            token: current,
+            left,
+            right,
+        }))
     }
 }
 
@@ -176,8 +212,8 @@ pub enum ParseError {
     Unexpected { given: Token, expected: TokenKind },
     #[error("Unexpected EOF")]
     Eof,
-    #[error("Unexpected token: {given} (expected start of statement)")]
-    NoStatement { given: Token },
+    #[error("No prefix expression")]
+    NoPrefix,
     #[error("Failed to parse integer: {0}")]
     ParseInt(#[from] std::num::ParseIntError),
 }
@@ -211,4 +247,17 @@ enum ExpressionKind {
     Product,
     Prefix,
     Call,
+}
+
+impl From<TokenKind> for ExpressionKind {
+    fn from(value: TokenKind) -> Self {
+        match value {
+            Equal | NotEqual => Self::Equal,
+            Less | Greater => Self::LessGreater,
+            Plus | Minus => Self::Sum,
+            Mult | Div => Self::Product,
+            Ident => Self::Call,
+            _ => Self::Lowest,
+        }
+    }
 }

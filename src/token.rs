@@ -169,7 +169,7 @@ impl Display for TokenKind {
             Self::NotEqual => "!=",
             Self::Less => "less than",
             Self::Greater => "greater than",
-            Self::Not => "not",
+            Self::Not => "!",
             Self::Plus => "+",
             Self::Minus => "-",
             Self::Mult => "*",
