@@ -7,6 +7,8 @@ use ast::Program;
 use rustyline::error::ReadlineError;
 
 fn main() {
+    println!("Monkey RPPL");
+    println!("Ctrl-D to exit");
     let mut rl = rustyline::DefaultEditor::new().unwrap();
     loop {
         match rl.readline(">> ") {
@@ -21,10 +23,7 @@ fn main() {
                 };
                 println!("{program}");
             }
-            Err(ReadlineError::Interrupted) => {
-                println!("CTRL-C");
-                break;
-            }
+            Err(ReadlineError::Interrupted) => {}
             Err(ReadlineError::Eof) => {
                 println!("CTRL-D");
                 break;
