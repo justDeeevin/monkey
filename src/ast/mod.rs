@@ -294,3 +294,55 @@ impl Node for BooleanLiteral {
 }
 
 impl Expression for BooleanLiteral {}
+
+#[derive(Debug)]
+pub struct IfExpression {
+    pub token: Token,
+    pub cond: Box<dyn Expression>,
+    pub cons: BlockStatement,
+    pub alternative: Option<BlockStatement>,
+}
+
+impl Display for IfExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "if {} {}", self.cond, self.cons)?;
+
+        if let Some(alternative) = &self.alternative {
+            write!(f, "else {alternative}")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Node for IfExpression {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+
+impl Expression for IfExpression {}
+
+#[derive(Debug)]
+pub struct BlockStatement {
+    pub token: Token,
+    pub statements: Vec<Box<dyn Statement>>,
+}
+
+impl Display for BlockStatement {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for statement in &self.statements {
+            write!(f, "{statement}")?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Node for BlockStatement {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+
+impl Statement for BlockStatement {}

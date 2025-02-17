@@ -4,8 +4,8 @@ use std::any::Any;
 
 use crate::{
     ast::{
-        BooleanLiteral, ExpressionStatement, Identifier, InfixExpression, Integer, IntegerLiteral,
-        LetStatement, PrefixExpression, Program, ReturnStatement,
+        BooleanLiteral, ExpressionStatement, Identifier, IfExpression, InfixExpression, Integer,
+        IntegerLiteral, LetStatement, PrefixExpression, Program, ReturnStatement,
         traits::{Expression, Node},
     },
     token::Token,
@@ -89,10 +89,7 @@ fn ident_expr() {
     };
     assert_eq!(program.statements.len(), 1);
 
-    let ident = program
-        .statements
-        .first()
-        .unwrap()
+    let ident = program.statements[0]
         .downcast_ref::<ExpressionStatement>()
         .expect("Could not downcast to expression statement")
         .expression
@@ -114,10 +111,7 @@ fn int_literal() {
     };
     assert_eq!(program.statements.len(), 1);
 
-    let int = program
-        .statements
-        .first()
-        .unwrap()
+    let int = program.statements[0]
         .downcast_ref::<ExpressionStatement>()
         .expect("Could not downcast to expression statement")
         .expression
@@ -142,10 +136,7 @@ fn prefix_expr() {
 
         assert_eq!(program.statements.len(), 1);
 
-        let prefix_expr = program
-            .statements
-            .first()
-            .unwrap()
+        let prefix_expr = program.statements[0]
             .downcast_ref::<ExpressionStatement>()
             .expect("Could not downcast to expression statement")
             .expression
@@ -168,10 +159,7 @@ fn prefix_expr() {
 
         assert_eq!(program.statements.len(), 1);
 
-        let prefix_expr = program
-            .statements
-            .first()
-            .unwrap()
+        let prefix_expr = program.statements[0]
             .downcast_ref::<ExpressionStatement>()
             .expect("Could not downcast to expression statement")
             .expression
@@ -252,10 +240,7 @@ fn infix_expr() {
 
         assert_eq!(program.statements.len(), 1);
 
-        let expr = &program
-            .statements
-            .first()
-            .unwrap()
+        let expr = &program.statements[0]
             .downcast_ref::<ExpressionStatement>()
             .expect("Could not downcast to expression statement")
             .expression;
@@ -283,14 +268,11 @@ fn infix_expr() {
 
         assert_eq!(program.statements.len(), 1);
 
-        let expr = &program
-            .statements
-            .first()
-            .unwrap()
+        let expr = &program.statements[0]
             .downcast_ref::<ExpressionStatement>()
             .expect("Could not downcast to expression statement")
             .expression;
-        test_infix(expr.as_ref(), &(left as bool), operator, &(right as bool))
+        test_infix(expr.as_ref(), &left, operator, &right)
     }
 }
 
@@ -346,16 +328,73 @@ fn bool_literal() {
     };
     assert_eq!(program.statements.len(), 1);
 
-    let bool_literal = program
-        .statements
-        .first()
-        .unwrap()
+    let bool_literal = program.statements[0]
         .downcast_ref::<ExpressionStatement>()
         .expect("Could not downcast to expression statement")
         .expression
         .downcast_ref::<BooleanLiteral>()
         .expect("Could not downcast to boolean literal");
 
-    assert_eq!(bool_literal.value(), true);
+    assert!(bool_literal.value());
     assert_eq!(bool_literal.token_literal(), "true");
+}
+
+#[test]
+fn if_expr() {
+    let input = "if (x < y) { x };";
+    let program = match input.parse::<Program>() {
+        Ok(program) => program,
+        Err(e) => panic!("Failed to parse program: {e}"),
+    };
+
+    assert_eq!(program.statements.len(), 1);
+    let if_expr = program.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<IfExpression>()
+        .expect("Could not downcast to if expression");
+
+    test_infix(if_expr.cond.as_ref(), &"x", "<", &"y");
+
+    assert_eq!(if_expr.cons.statements.len(), 1);
+    let cons = if_expr.cons.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement");
+    test_identifier(cons.expression.as_ref(), &"x");
+    assert!(if_expr.alternative.is_none());
+}
+
+#[test]
+fn if_else_expr() {
+    let input = "if (x < y) { x } else { y };";
+    let program = match input.parse::<Program>() {
+        Ok(program) => program,
+        Err(e) => panic!("Failed to parse program: {e}"),
+    };
+
+    assert_eq!(program.statements.len(), 1);
+
+    let if_expr = program.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<IfExpression>()
+        .expect("Could not downcast to if expression");
+
+    test_infix(if_expr.cond.as_ref(), &"x", "<", &"y");
+
+    assert_eq!(if_expr.cons.statements.len(), 1);
+    let cons = if_expr.cons.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement");
+    test_identifier(cons.expression.as_ref(), &"x");
+    let alternative = if_expr
+        .alternative
+        .as_ref()
+        .expect("No alternative")
+        .statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement");
+    test_identifier(alternative.expression.as_ref(), &"y");
 }

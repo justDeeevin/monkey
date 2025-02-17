@@ -4,8 +4,9 @@ use std::str::FromStr;
 
 use crate::{
     ast::{
-        BooleanLiteral, ExpressionStatement, Identifier, InfixExpression, IntegerLiteral,
-        IntegerLiteralConstructionError, LetStatement, PrefixExpression, Program, ReturnStatement,
+        BlockStatement, BooleanLiteral, ExpressionStatement, Identifier, IfExpression,
+        InfixExpression, IntegerLiteral, IntegerLiteralConstructionError, LetStatement,
+        PrefixExpression, Program, ReturnStatement,
         traits::{Expression, Statement},
     },
     lexer::Lexer,
@@ -166,8 +167,49 @@ impl Parser {
                 self.expect_peek(RParen)?;
                 Some(exp)
             }
+            If => {
+                let token = self.current_clone()?;
+                self.expect_peek(LParen)?;
+
+                self.next_token();
+                let cond = self.parse_expression(ExpressionKind::Lowest)?;
+                self.expect_peek(RParen)?;
+                self.expect_peek(LBrace)?;
+
+                let cons = self.parse_block_statement()?;
+
+                let alternative = if self.peek_ref()?.kind == Else {
+                    self.next_token();
+
+                    self.expect_peek(LBrace)?;
+
+                    Some(self.parse_block_statement()?)
+                } else {
+                    None
+                };
+
+                Some(Box::new(IfExpression {
+                    token,
+                    cond,
+                    cons,
+                    alternative,
+                }))
+            }
             _ => None,
         })
+    }
+
+    fn parse_block_statement(&mut self) -> Result<BlockStatement, ParseError> {
+        let token = self.current_clone()?;
+        let mut statements = Vec::new();
+
+        self.next_token();
+        while self.current_ref()?.kind != RBrace {
+            statements.push(self.parse_statement()?);
+            self.next_token();
+        }
+
+        Ok(BlockStatement { token, statements })
     }
 
     fn parse_infix(
