@@ -97,6 +97,19 @@ fn eval_int_infix(operator: impl AsRef<str>, left: &Integer, right: &Integer) ->
         "/" => Box::new(Integer {
             value: left.value / right.value,
         }),
-        _ => Box::new(Null),
+        "<" => Box::new(Boolean {
+            value: left.value < right.value,
+        }),
+        ">" => Box::new(Boolean {
+            value: left.value > right.value,
+        }),
+        "==" => Box::new(Boolean {
+            value: left.value == right.value,
+        }),
+        "!=" => Box::new(Boolean {
+            value: left.value != right.value,
+        }),
+        // should be, at least...
+        _ => unreachable!(),
     }
 }
