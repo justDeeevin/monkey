@@ -14,42 +14,37 @@ use crate::{
 
 #[test]
 fn let_statements() {
-    let input = r#"
-        let x = 5;
-        let y = 10;
-        let foobar = 838383;
-    "#;
+    let inputs: [(&str, &str, &dyn Any); 3] = [
+        ("let x = 5;", "x", &(5 as Integer)),
+        ("let y = true;", "y", &true),
+        ("let foobar = y;", "foobar", &"y"),
+    ];
 
-    let program = new_program(input, input.lines().count() - 2);
-
-    let test_idents = ["x", "y", "foobar"];
-
-    for (ident, statement) in test_idents.iter().zip(program.statements) {
-        assert_eq!(statement.token_literal(), "let");
-
-        let let_statement = statement
+    for (input, ident, value) in inputs {
+        let program = new_program(input, 1);
+        let let_statement = program.statements[0]
             .downcast_ref::<LetStatement>()
             .expect("Could not downcast to let statement");
-
-        assert_eq!(let_statement.name.value(), *ident);
-        assert_eq!(let_statement.name.token_literal(), *ident);
+        assert_eq!(let_statement.name.value(), ident);
+        assert_eq!(let_statement.name.token_literal(), ident);
+        test_literal(let_statement.value.as_ref(), value);
     }
 }
 
 #[test]
 fn return_statements() {
-    let input = r#"
-        return 5;
-        return 10;
-        return 993322;
-    "#;
+    let inputs: [(&str, &dyn Any); 3] = [
+        ("return 5;", &(5 as Integer)),
+        ("return true;", &true),
+        ("return foobar;", &"foobar"),
+    ];
 
-    let program = new_program(input, input.lines().count() - 2);
-    for statement in program.statements {
-        let return_statement = statement
+    for (input, value) in inputs {
+        let program = new_program(input, 1);
+        let return_statement = program.statements[0]
             .downcast_ref::<ReturnStatement>()
             .expect("Could not downcast to return statement");
-        assert_eq!(return_statement.token_literal(), "return");
+        test_literal(return_statement.value.as_ref(), value);
     }
 }
 

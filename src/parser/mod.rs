@@ -101,24 +101,28 @@ impl Parser {
 
         self.expect_peek(Assign)?;
 
-        self.skip_to_semi()?;
+        self.next_token();
 
-        Ok(LetStatement {
-            name,
-            value: Box::new(Identifier::new("foo")),
-            token,
-        })
+        let value = self.parse_expression(ExpressionKind::Lowest)?;
+
+        if self.peek_ref()?.kind == Semi {
+            self.next_token();
+        }
+
+        Ok(LetStatement { name, value, token })
     }
 
     fn parse_return_statement(&mut self) -> Result<ReturnStatement, ParseError> {
-        let out = ReturnStatement {
-            token: self.current_clone()?,
-            value: Box::new(Identifier::new("foo")),
-        };
+        let token = self.current_clone()?;
 
-        self.skip_to_semi()?;
+        self.next_token();
+        let value = self.parse_expression(ExpressionKind::Lowest)?;
 
-        Ok(out)
+        if self.peek_ref()?.kind == Semi {
+            self.next_token();
+        }
+
+        Ok(ReturnStatement { token, value })
     }
 
     fn skip_to_semi(&mut self) -> Result<(), ParseError> {
