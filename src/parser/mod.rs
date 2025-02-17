@@ -84,13 +84,13 @@ impl Parser {
             return Err(ParseError::NoPrefix);
         };
 
-        if self.peek.is_none() {
-            return Ok(left);
-        }
-
-        while self.peek_ref()?.kind != Semi && kind < self.peek_ref()?.kind.into() {
-            self.next_token();
-            left = self.parse_infix(left)?;
+        while let Some(peek) = &self.peek {
+            if peek.kind != Semi && kind < peek.kind.into() {
+                self.next_token();
+                left = self.parse_infix(left)?;
+            } else {
+                break;
+            }
         }
 
         Ok(left)
