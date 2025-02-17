@@ -125,14 +125,6 @@ impl Parser {
         Ok(ReturnStatement { token, value })
     }
 
-    fn skip_to_semi(&mut self) -> Result<(), ParseError> {
-        while self.current_ref()?.kind != Semi {
-            self.next_token();
-        }
-
-        Ok(())
-    }
-
     fn expect_peek(&mut self, expected: TokenKind) -> Result<(), ParseError> {
         let Some(peek) = &self.peek else {
             return Err(ParseError::Eof);
