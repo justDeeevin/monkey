@@ -16,7 +16,11 @@ impl Display for Integer {
     }
 }
 
-impl Object for Integer {}
+impl Object for Integer {
+    fn truthy(&self) -> bool {
+        true
+    }
+}
 
 #[derive(Debug)]
 pub struct Boolean {
@@ -29,7 +33,11 @@ impl Display for Boolean {
     }
 }
 
-impl Object for Boolean {}
+impl Object for Boolean {
+    fn truthy(&self) -> bool {
+        self.value
+    }
+}
 
 #[derive(Debug)]
 pub struct Null;
@@ -40,4 +48,8 @@ impl Display for Null {
     }
 }
 
-impl Object for Null {}
+impl Object for Null {
+    fn truthy(&self) -> bool {
+        false
+    }
+}

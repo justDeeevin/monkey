@@ -2,8 +2,8 @@ mod test;
 
 use crate::{
     ast::{
-        BooleanLiteral, ExpressionStatement, InfixExpression, IntegerLiteral, PrefixExpression,
-        Program,
+        BlockStatement, BooleanLiteral, ExpressionStatement, IfExpression, InfixExpression,
+        IntegerLiteral, PrefixExpression, Program,
         traits::{Node, Statement},
     },
     object::{Boolean, Integer, Null, traits::Object},
@@ -30,6 +30,10 @@ pub fn eval(root: &dyn Node) -> Box<dyn Object> {
         let left = eval(infix.left.as_ref());
         let right = eval(infix.right.as_ref());
         eval_infix(&infix.operator, left, right)
+    } else if let Some(block) = root.downcast_ref::<BlockStatement>() {
+        eval_statements(&block.statements)
+    } else if let Some(if_expr) = root.downcast_ref::<IfExpression>() {
+        eval_if(if_expr)
     } else {
         todo!()
     }
@@ -126,5 +130,16 @@ fn eval_int_infix(operator: impl AsRef<str>, left: &Integer, right: &Integer) ->
         }),
         // should be, at least...
         _ => unreachable!(),
+    }
+}
+
+fn eval_if(if_expr: &IfExpression) -> Box<dyn Object> {
+    let cond = eval(if_expr.cond.as_ref());
+    if cond.truthy() {
+        eval(&if_expr.cons)
+    } else if let Some(alt) = if_expr.alternative.as_ref() {
+        eval(alt)
+    } else {
+        Box::new(Null)
     }
 }

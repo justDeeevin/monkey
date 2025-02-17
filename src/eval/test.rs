@@ -3,7 +3,7 @@
 use super::eval;
 use crate::{
     ast::Integer as Int,
-    object::{Boolean, Integer, traits::Object},
+    object::{Boolean, Integer, Null, traits::Object},
     parser::test::new_program,
 };
 
@@ -90,4 +90,32 @@ fn bang() {
         let eval = eval(&new_program(input, 1));
         test_bool(eval.as_ref(), expected);
     }
+}
+
+#[test]
+fn if_else() {
+    let tests = [
+        ("if (true) {10}", Some(10)),
+        ("if (false) {10}", None),
+        ("if (1) {10}", Some(10)),
+        ("if (1 < 2) {10}", Some(10)),
+        ("if (1 > 2) {10}", None),
+        ("if (1 > 2) {10} else {20}", Some(20)),
+        ("if (1 < 2) {10} else {20}", Some(10)),
+    ];
+
+    for (input, expected) in tests {
+        let eval = eval(&new_program(input, 1));
+        if let Some(expected) = expected {
+            test_int(eval.as_ref(), expected);
+        } else {
+            test_null(eval.as_ref());
+        }
+    }
+}
+
+fn test_null(object: &dyn Object) {
+    object
+        .downcast_ref::<Null>()
+        .expect(format!("Could not downcast to null object, got {:?}", object).as_str());
 }
