@@ -70,7 +70,7 @@ impl Parser {
             token: self.current_clone()?,
             expression: self.parse_expression(ExpressionKind::Lowest)?,
         };
-        if self.peek_ref()?.kind == Semi {
+        if self.peek.as_ref().map(|t| t.kind) == Some(Semi) {
             self.next_token();
         }
         Ok(out)
@@ -83,6 +83,10 @@ impl Parser {
         let Some(mut left) = self.parse_prefix()? else {
             return Err(ParseError::NoPrefix);
         };
+
+        if self.peek.is_none() {
+            return Ok(left);
+        }
 
         while self.peek_ref()?.kind != Semi && kind < self.peek_ref()?.kind.into() {
             self.next_token();
@@ -105,7 +109,7 @@ impl Parser {
 
         let value = self.parse_expression(ExpressionKind::Lowest)?;
 
-        if self.peek_ref()?.kind == Semi {
+        if self.peek.as_ref().map(|t| t.kind) == Some(Semi) {
             self.next_token();
         }
 
@@ -118,7 +122,7 @@ impl Parser {
         self.next_token();
         let value = self.parse_expression(ExpressionKind::Lowest)?;
 
-        if self.peek_ref()?.kind == Semi {
+        if self.peek.as_ref().map(|t| t.kind) == Some(Semi) {
             self.next_token();
         }
 
@@ -126,12 +130,10 @@ impl Parser {
     }
 
     fn expect_peek(&mut self, expected: TokenKind) -> Result<(), ParseError> {
-        let Some(peek) = &self.peek else {
-            return Err(ParseError::Eof);
-        };
+        let peek = self.peek_clone()?;
         if peek.kind != expected {
             return Err(ParseError::Unexpected {
-                given: peek.clone(),
+                given: peek,
                 expected,
             });
         }
