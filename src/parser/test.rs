@@ -379,7 +379,7 @@ fn fn_params() {
     }
 }
 
-fn new_program(input: &str, expected_statements: usize) -> Program {
+pub fn new_program(input: &str, expected_statements: usize) -> Program {
     let program = match input.parse::<Program>() {
         Ok(program) => program,
         Err(e) => {

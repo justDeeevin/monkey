@@ -1,13 +1,16 @@
 mod ast;
+mod eval;
 mod lexer;
+mod object;
 mod parser;
 mod token;
 
 use ast::Program;
+use eval::eval;
 use rustyline::error::ReadlineError;
 
 fn main() {
-    println!("Monkey RPPL");
+    println!("Monkey REPL");
     println!("Ctrl-D to exit");
     let mut rl = rustyline::DefaultEditor::new().unwrap();
     loop {
@@ -21,7 +24,7 @@ fn main() {
                         continue;
                     }
                 };
-                println!("{program}");
+                println!("{}", eval(&program))
             }
             Err(ReadlineError::Interrupted) => {}
             Err(ReadlineError::Eof) => {
