@@ -300,7 +300,7 @@ fn if_expr() {
     let cons = if_expr.cons.statements[0]
         .downcast_ref::<ExpressionStatement>()
         .expect("Could not downcast to expression statement");
-    test_identifier(cons.expression.as_ref(), &"x");
+    test_identifier(cons.expression.as_ref(), "x");
     assert!(if_expr.alternative.is_none());
 }
 
@@ -322,7 +322,7 @@ fn if_else_expr() {
     let cons = if_expr.cons.statements[0]
         .downcast_ref::<ExpressionStatement>()
         .expect("Could not downcast to expression statement");
-    test_identifier(cons.expression.as_ref(), &"x");
+    test_identifier(cons.expression.as_ref(), "x");
     let alternative = if_expr
         .alternative
         .as_ref()
@@ -330,7 +330,7 @@ fn if_else_expr() {
         .statements[0]
         .downcast_ref::<ExpressionStatement>()
         .expect("Could not downcast to expression statement");
-    test_identifier(alternative.expression.as_ref(), &"y");
+    test_identifier(alternative.expression.as_ref(), "y");
 }
 
 #[test]
@@ -404,7 +404,7 @@ fn call_expr() {
         .downcast_ref::<CallExpression>()
         .expect("Could not downcast to call expression");
 
-    test_identifier(call_expr.function.as_ref(), &"add");
+    test_identifier(call_expr.function.as_ref(), "add");
 
     assert_eq!(call_expr.arguments.len(), 3);
 

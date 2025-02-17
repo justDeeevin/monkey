@@ -1,11 +1,11 @@
 pub mod traits;
 
-use std::fmt::Display;
+use std::{collections::HashMap, fmt::Display, rc::Rc};
 
 use crate::ast::Integer as Int;
 use traits::Object;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Integer {
     pub value: Int,
 }
@@ -22,7 +22,7 @@ impl Object for Integer {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Boolean {
     pub value: bool,
 }
@@ -39,7 +39,7 @@ impl Object for Boolean {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Null;
 
 impl Display for Null {
@@ -54,7 +54,7 @@ impl Object for Null {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReturnValue {
     pub value: Box<dyn Object>,
 }
@@ -68,5 +68,22 @@ impl Display for ReturnValue {
 impl Object for ReturnValue {
     fn truthy(&self) -> bool {
         self.value.truthy()
+    }
+}
+
+#[derive(Default, Clone)]
+pub struct Environment(HashMap<Rc<str>, Box<dyn Object>>);
+
+impl std::ops::Deref for Environment {
+    type Target = HashMap<Rc<str>, Box<dyn Object>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Environment {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
     }
 }

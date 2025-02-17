@@ -323,19 +323,17 @@ pub enum ParseError {
 }
 
 #[derive(Debug, thiserror::Error)]
-pub struct ProgramError {
-    errors: Vec<ParseError>,
-}
+pub struct ProgramError(Vec<ParseError>);
 
 impl ProgramError {
     pub fn new(errors: Vec<ParseError>) -> Self {
-        Self { errors }
+        Self(errors)
     }
 }
 
 impl std::fmt::Display for ProgramError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        for error in &self.errors {
+        for error in &self.0 {
             writeln!(f, "{error}")?;
         }
         Ok(())

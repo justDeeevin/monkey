@@ -3,9 +3,19 @@
 use super::eval;
 use crate::{
     ast::Integer as Int,
-    object::{Boolean, Integer, Null, traits::Object},
+    object::{Boolean, Environment, Integer, Null, traits::Object},
     parser::test::new_program,
 };
+
+fn new_eval(input: &str, expected_statements: usize) -> Box<dyn Object> {
+    let program = new_program(input, expected_statements);
+    match eval(&program, &mut Environment::default()) {
+        Ok(eval) => eval,
+        Err(e) => {
+            panic!("Failed to eval program: {e}");
+        }
+    }
+}
 
 #[test]
 fn int() {
@@ -27,7 +37,7 @@ fn int() {
         ("(5 + 10 * 2 + 15 / 3) * 2 + -10", 50),
     ];
     for (input, expected) in tests {
-        let eval = eval(&new_program(input, 1));
+        let eval = new_eval(input, 1);
         test_int(eval.as_ref(), expected);
     }
 }
@@ -35,7 +45,7 @@ fn int() {
 fn test_int(object: &dyn Object, expected: Int) {
     let int = object
         .downcast_ref::<Integer>()
-        .expect(format!("Could not downcast to integer object, got {:?}", object).as_str());
+        .unwrap_or_else(|| panic!("Could not downcast to integer object, got {:?}", object));
     assert_eq!(int.value, expected);
 }
 
@@ -63,7 +73,7 @@ fn bool() {
         ("(1 > 2) == false", true),
     ];
     for (input, expected) in tests {
-        let eval = eval(&new_program(input, 1));
+        let eval = new_eval(input, 1);
         test_bool(eval.as_ref(), expected);
     }
 }
@@ -71,7 +81,7 @@ fn bool() {
 fn test_bool(object: &dyn Object, expected: bool) {
     let bool = object
         .downcast_ref::<Boolean>()
-        .expect(format!("Could not downcast to boolean object, got {:?}", object).as_str());
+        .unwrap_or_else(|| panic!("Could not downcast to boolean object, got {:?}", object));
     assert_eq!(bool.value, expected);
 }
 
@@ -87,7 +97,7 @@ fn bang() {
     ];
 
     for (input, expected) in tests {
-        let eval = eval(&new_program(input, 1));
+        let eval = new_eval(input, 1);
         test_bool(eval.as_ref(), expected);
     }
 }
@@ -105,7 +115,7 @@ fn if_else() {
     ];
 
     for (input, expected) in tests {
-        let eval = eval(&new_program(input, 1));
+        let eval = new_eval(input, 1);
         if let Some(expected) = expected {
             test_int(eval.as_ref(), expected);
         } else {
@@ -117,7 +127,7 @@ fn if_else() {
 fn test_null(object: &dyn Object) {
     object
         .downcast_ref::<Null>()
-        .expect(format!("Could not downcast to null object, got {:?}", object).as_str());
+        .unwrap_or_else(|| panic!("Could not downcast to null object, got {:?}", object));
 }
 
 #[test]
@@ -143,7 +153,22 @@ fn return_statements() {
     ];
 
     for (n_statements, input, expected) in tests {
-        let eval = eval(&new_program(input, n_statements));
+        let eval = new_eval(input, n_statements);
+        test_int(eval.as_ref(), expected);
+    }
+}
+
+#[test]
+fn let_statements() {
+    let tests = [
+        (2, "let a = 5; a;", 5),
+        (2, "let a = 5 * 5; a;", 25),
+        (3, "let a = 5; let b = a; b;", 5),
+        (4, "let a = 5; let b = a; let c = a + b + 5; c;", 15),
+    ];
+
+    for (n_statements, input, expected) in tests {
+        let eval = new_eval(input, n_statements);
         test_int(eval.as_ref(), expected);
     }
 }
