@@ -4,8 +4,8 @@ use std::str::FromStr;
 
 use crate::{
     ast::{
-        BlockStatement, BooleanLiteral, ExpressionStatement, FunctionLiteral, Identifier,
-        IfExpression, InfixExpression, IntegerLiteral, IntegerLiteralConstructionError,
+        BlockStatement, BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral,
+        Identifier, IfExpression, InfixExpression, IntegerLiteral, IntegerLiteralConstructionError,
         LetStatement, PrefixExpression, Program, ReturnStatement,
         traits::{Expression, Statement},
     },
@@ -250,6 +250,13 @@ impl Parser {
         left: Box<dyn Expression>,
     ) -> Result<Box<dyn Expression>, ParseError> {
         let current = self.current_clone()?;
+        if current.kind == LParen {
+            return Ok(Box::new(CallExpression {
+                token: current,
+                function: left,
+                arguments: self.parse_call_arguments()?,
+            }));
+        }
         let kind = ExpressionKind::from(current.kind);
         self.next_token();
         let right = self.parse_expression(kind)?;
@@ -260,6 +267,24 @@ impl Parser {
             left,
             right,
         }))
+    }
+
+    fn parse_call_arguments(&mut self) -> Result<Vec<Box<dyn Expression>>, ParseError> {
+        let mut out = Vec::new();
+        self.next_token();
+        if self.current_ref()?.kind == RParen {
+            return Ok(out);
+        }
+
+        out.push(self.parse_expression(ExpressionKind::Lowest)?);
+        while self.peek_ref()?.kind == Comma {
+            self.next_token();
+            self.next_token();
+            out.push(self.parse_expression(ExpressionKind::Lowest)?);
+        }
+
+        self.expect_peek(RParen)?;
+        Ok(out)
     }
 }
 
@@ -337,7 +362,7 @@ impl From<TokenKind> for ExpressionKind {
             Less | Greater => Self::LessGreater,
             Plus | Minus => Self::Sum,
             Mult | Div => Self::Product,
-            Ident => Self::Call,
+            LParen => Self::Call,
             _ => Self::Lowest,
         }
     }

@@ -4,9 +4,9 @@ use std::any::Any;
 
 use crate::{
     ast::{
-        BooleanLiteral, ExpressionStatement, FunctionLiteral, Identifier, IfExpression,
-        InfixExpression, Integer, IntegerLiteral, LetStatement, PrefixExpression, Program,
-        ReturnStatement,
+        BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral, Identifier,
+        IfExpression, InfixExpression, Integer, IntegerLiteral, LetStatement, PrefixExpression,
+        Program, ReturnStatement,
         traits::{Expression, Node},
     },
     token::Token,
@@ -249,6 +249,15 @@ fn pemdas() {
         ("2 / (5 + 5);", "(2 / (5 + 5));"),
         ("-(5 + 5);", "(-(5 + 5));"),
         ("!(true == true);", "(!(true == true));"),
+        ("a + add(b * c) + d;", "((a + add((b * c))) + d);"),
+        (
+            "add(a, b, 1, 2 * 3, 4 + 5, add(6, 7 * 8));",
+            "add(a, b, 1, (2 * 3), (4 + 5), add(6, (7 * 8)));",
+        ),
+        (
+            "add(a + b + c * d / f + g);",
+            "add((((a + b) + ((c * d) / f)) + g));",
+        ),
     ];
 
     for (input, expected) in inputs {
@@ -386,4 +395,35 @@ fn new_program(input: &str, expected_statements: usize) -> Program {
     assert_eq!(program.statements.len(), expected_statements);
 
     program
+}
+
+#[test]
+fn call_expr() {
+    let input = "add(1, 2 * 3, 4 + 5);";
+    let program = new_program(input, 1);
+
+    let call_expr = program.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<CallExpression>()
+        .expect("Could not downcast to call expression");
+
+    test_identifier(call_expr.function.as_ref(), &"add");
+
+    assert_eq!(call_expr.arguments.len(), 3);
+
+    test_literal(call_expr.arguments[0].as_ref(), &(1 as Integer));
+    test_infix(
+        call_expr.arguments[1].as_ref(),
+        &(2 as Integer),
+        "*",
+        &(3 as Integer),
+    );
+    test_infix(
+        call_expr.arguments[2].as_ref(),
+        &(4 as Integer),
+        "+",
+        &(5 as Integer),
+    );
 }

@@ -368,12 +368,10 @@ pub struct FunctionLiteral {
 impl Display for FunctionLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}(", self.token_literal())?;
-        for param in &self.parameters {
+        for param in self.parameters.iter().take(self.parameters.len() - 1) {
             write!(f, "{param}, ")?;
         }
-        write!(f, ") {}", self.body)?;
-
-        Ok(())
+        write!(f, "{}) {}", self.parameters.last().unwrap(), self.body)
     }
 }
 
@@ -384,3 +382,27 @@ impl Node for FunctionLiteral {
 }
 
 impl Expression for FunctionLiteral {}
+
+#[derive(Debug)]
+pub struct CallExpression {
+    pub token: Token,
+    pub function: Box<dyn Expression>,
+    pub arguments: Vec<Box<dyn Expression>>,
+}
+
+impl Display for CallExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}(", self.function)?;
+        for arg in self.arguments.iter().take(self.arguments.len() - 1) {
+            write!(f, "{arg}, ")?;
+        }
+        write!(f, "{})", self.arguments.last().unwrap())
+    }
+}
+
+impl Node for CallExpression {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+impl Expression for CallExpression {}
