@@ -2,7 +2,8 @@ mod test;
 
 use crate::{
     ast::{
-        BooleanLiteral, ExpressionStatement, IntegerLiteral, PrefixExpression, Program,
+        BooleanLiteral, ExpressionStatement, InfixExpression, IntegerLiteral, PrefixExpression,
+        Program,
         traits::{Node, Statement},
     },
     object::{Boolean, Integer, Null, traits::Object},
@@ -25,6 +26,10 @@ pub fn eval(root: &dyn Node) -> Box<dyn Object> {
     } else if let Some(prefix) = root.downcast_ref::<PrefixExpression>() {
         let right = eval(prefix.right.as_ref());
         eval_prefix(prefix.operator, right)
+    } else if let Some(infix) = root.downcast_ref::<InfixExpression>() {
+        let left = eval(infix.left.as_ref());
+        let right = eval(infix.right.as_ref());
+        eval_infix(&infix.operator, left, right)
     } else {
         todo!()
     }
@@ -61,4 +66,37 @@ fn eval_neg(right: Box<dyn Object>) -> Box<dyn Object> {
         return Box::new(Null);
     };
     Box::new(Integer { value: -int.value })
+}
+
+fn eval_infix(
+    operator: impl AsRef<str>,
+    left: Box<dyn Object>,
+    right: Box<dyn Object>,
+) -> Box<dyn Object> {
+    let (Some(left), Some(right)) = (
+        left.downcast_ref::<Integer>(),
+        right.downcast_ref::<Integer>(),
+    ) else {
+        return Box::new(Null);
+    };
+
+    eval_int_infix(operator, left, right)
+}
+
+fn eval_int_infix(operator: impl AsRef<str>, left: &Integer, right: &Integer) -> Box<dyn Object> {
+    match operator.as_ref() {
+        "+" => Box::new(Integer {
+            value: left.value + right.value,
+        }),
+        "-" => Box::new(Integer {
+            value: left.value - right.value,
+        }),
+        "*" => Box::new(Integer {
+            value: left.value * right.value,
+        }),
+        "/" => Box::new(Integer {
+            value: left.value / right.value,
+        }),
+        _ => Box::new(Null),
+    }
 }
