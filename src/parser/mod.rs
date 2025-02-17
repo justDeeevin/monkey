@@ -176,7 +176,7 @@ impl Parser {
 
                 let cons = self.parse_block_statement()?;
 
-                let alternative = if self.peek_ref()?.kind == Else {
+                let alternative = if self.peek.as_ref().map(|t| t.kind) == Some(Else) {
                     self.next_token();
 
                     self.expect_peek(LBrace)?;
