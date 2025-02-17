@@ -1,9 +1,11 @@
 #![cfg(test)]
 
+use std::any::Any;
+
 use crate::{
     ast::{
-        ExpressionStatement, Identifier, InfixExpression, Integer, IntegerLiteral, LetStatement,
-        PrefixExpression, Program, ReturnStatement,
+        BooleanLiteral, ExpressionStatement, Identifier, InfixExpression, Integer, IntegerLiteral,
+        LetStatement, PrefixExpression, Program, ReturnStatement,
         traits::{Expression, Node},
     },
     token::Token,
@@ -128,9 +130,9 @@ fn int_literal() {
 
 #[test]
 fn prefix_expr() {
-    let inputs = [("!5;", '!', 5), ("-15;", '-', 15)];
+    let integer_inputs = [("!5;", '!', 5), ("-15;", '-', 15)];
 
-    for (input, operator, expected) in inputs {
+    for (input, operator, expected) in integer_inputs {
         let program = match input.parse::<Program>() {
             Ok(program) => program,
             Err(e) => {
@@ -154,6 +156,32 @@ fn prefix_expr() {
 
         test_int_literal(prefix_expr.right.as_ref(), expected);
     }
+
+    let boolean_inputs = [("!true;", '!', true), ("!false;", '!', false)];
+    for (input, operator, expected) in boolean_inputs {
+        let program = match input.parse::<Program>() {
+            Ok(program) => program,
+            Err(e) => {
+                panic!("Failed to parse program: {e}");
+            }
+        };
+
+        assert_eq!(program.statements.len(), 1);
+
+        let prefix_expr = program
+            .statements
+            .first()
+            .unwrap()
+            .downcast_ref::<ExpressionStatement>()
+            .expect("Could not downcast to expression statement")
+            .expression
+            .downcast_ref::<PrefixExpression>()
+            .expect("Could not downcast to prefix expression");
+
+        assert_eq!(prefix_expr.operator, operator);
+
+        test_bool_literal(prefix_expr.right.as_ref(), expected);
+    }
 }
 
 fn test_int_literal(expr: &dyn Expression, value: Integer) {
@@ -164,9 +192,46 @@ fn test_int_literal(expr: &dyn Expression, value: Integer) {
     assert_eq!(int.token_literal(), &value.to_string());
 }
 
+fn test_identifier(expr: &dyn Expression, value: &str) {
+    let ident = expr
+        .downcast_ref::<Identifier>()
+        .expect("Could not downcast to identifier");
+    assert_eq!(ident.value(), value);
+    assert_eq!(ident.token_literal(), value);
+}
+
+fn test_literal(expr: &dyn Expression, value: &dyn Any) {
+    if let Some(value) = value.downcast_ref::<Integer>() {
+        test_int_literal(expr, *value);
+    } else if let Some(value) = value.downcast_ref::<&str>() {
+        test_identifier(expr, value);
+    } else if let Some(value) = value.downcast_ref::<bool>() {
+        test_bool_literal(expr, *value);
+    } else {
+        panic!("Unsupported literal type");
+    }
+}
+
+fn test_bool_literal(expr: &dyn Expression, value: bool) {
+    let bool_literal = expr
+        .downcast_ref::<BooleanLiteral>()
+        .expect("Could not downcast to boolean literal");
+    assert_eq!(bool_literal.value(), value);
+    assert_eq!(bool_literal.token_literal(), value.to_string().as_str());
+}
+
+fn test_infix(expr: &dyn Expression, left: &dyn Any, operator: &str, right: &dyn Any) {
+    let infix = expr
+        .downcast_ref::<InfixExpression>()
+        .expect("Could not downcast to infix");
+    test_literal(infix.left.as_ref(), left);
+    assert_eq!(infix.operator.as_ref(), operator);
+    test_literal(infix.right.as_ref(), right);
+}
+
 #[test]
 fn infix_expr() {
-    let inputs = [
+    let integer_inputs = [
         ("5 + 5;", 5, "+", 5),
         ("5 - 5;", 5, "-", 5),
         ("5 * 5;", 5, "*", 5),
@@ -177,7 +242,7 @@ fn infix_expr() {
         ("5 > 5;", 5, ">", 5),
     ];
 
-    for (input, left, operator, right) in inputs {
+    for (input, left, operator, right) in integer_inputs {
         let program = match input.parse::<Program>() {
             Ok(program) => program,
             Err(e) => {
@@ -187,18 +252,45 @@ fn infix_expr() {
 
         assert_eq!(program.statements.len(), 1);
 
-        let infix_expr = program
+        let expr = &program
             .statements
             .first()
             .unwrap()
             .downcast_ref::<ExpressionStatement>()
             .expect("Could not downcast to expression statement")
-            .expression
-            .downcast_ref::<InfixExpression>()
-            .expect("Could not downcast to infix expression");
-        test_int_literal(infix_expr.left.as_ref(), left);
-        assert_eq!(infix_expr.operator.as_ref(), operator);
-        test_int_literal(infix_expr.right.as_ref(), right);
+            .expression;
+        test_infix(
+            expr.as_ref(),
+            &(left as Integer),
+            operator,
+            &(right as Integer),
+        )
+    }
+
+    let boolean_inputs = [
+        ("true == true;", true, "==", true),
+        ("true != false;", true, "!=", false),
+        ("false == false;", false, "==", false),
+    ];
+
+    for (input, left, operator, right) in boolean_inputs {
+        let program = match input.parse::<Program>() {
+            Ok(program) => program,
+            Err(e) => {
+                panic!("Failed to parse program: {e}");
+            }
+        };
+
+        assert_eq!(program.statements.len(), 1);
+
+        let expr = &program
+            .statements
+            .first()
+            .unwrap()
+            .downcast_ref::<ExpressionStatement>()
+            .expect("Could not downcast to expression statement")
+            .expression;
+        test_infix(expr.as_ref(), &(left as bool), operator, &(right as bool))
     }
 }
 
@@ -220,6 +312,15 @@ fn pemdas() {
             "3 + 4 * 5 == 3 * 1 + 4 * 5;",
             "((3 + (4 * 5)) == ((3 * 1) + (4 * 5)));",
         ),
+        ("true;", "true;"),
+        ("false;", "false;"),
+        ("3 > 5 == false;", "((3 > 5) == false);"),
+        ("3 < 5 == true;", "((3 < 5) == true);"),
+        ("1 + (2 + 3) + 4;", "((1 + (2 + 3)) + 4);"),
+        ("(5 + 5) * 2;", "((5 + 5) * 2);"),
+        ("2 / (5 + 5);", "(2 / (5 + 5));"),
+        ("-(5 + 5);", "(-(5 + 5));"),
+        ("!(true == true);", "(!(true == true));"),
     ];
 
     for (input, expected) in inputs {
@@ -232,4 +333,29 @@ fn pemdas() {
 
         assert_eq!(program.to_string(), expected);
     }
+}
+
+#[test]
+fn bool_literal() {
+    let input = "true;";
+    let program = match input.parse::<Program>() {
+        Ok(program) => program,
+        Err(e) => {
+            panic!("Failed to parse program: {e}");
+        }
+    };
+    assert_eq!(program.statements.len(), 1);
+
+    let bool_literal = program
+        .statements
+        .first()
+        .unwrap()
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<BooleanLiteral>()
+        .expect("Could not downcast to boolean literal");
+
+    assert_eq!(bool_literal.value(), true);
+    assert_eq!(bool_literal.token_literal(), "true");
 }

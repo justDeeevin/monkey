@@ -75,12 +75,20 @@ impl Identifier {
     pub fn value(&self) -> &str {
         &self.value
     }
+}
 
-    pub fn from_token(token: Token) -> Self {
-        Self {
+impl TryFrom<Token> for Identifier {
+    type Error = ();
+
+    fn try_from(token: Token) -> Result<Self, Self::Error> {
+        if token.kind != TokenKind::Ident {
+            return Err(());
+        }
+
+        Ok(Self {
             value: token.literal.clone(),
             token,
-        }
+        })
     }
 }
 
@@ -160,6 +168,29 @@ impl IntegerLiteral {
     }
 }
 
+#[derive(Debug, thiserror::Error)]
+pub enum IntegerLiteralConstructionError {
+    #[error("Failed to parse int: {0}")]
+    ParseInt(#[from] std::num::ParseIntError),
+    #[error("Given Token was not of kind Int")]
+    NonInt,
+}
+
+impl TryFrom<Token> for IntegerLiteral {
+    type Error = IntegerLiteralConstructionError;
+
+    fn try_from(value: Token) -> Result<Self, Self::Error> {
+        if value.kind != TokenKind::Int {
+            return Err(IntegerLiteralConstructionError::NonInt);
+        }
+
+        Ok(Self {
+            value: value.literal.parse()?,
+            token: value,
+        })
+    }
+}
+
 impl Display for IntegerLiteral {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.value)
@@ -216,3 +247,50 @@ impl Node for InfixExpression {
 }
 
 impl Expression for InfixExpression {}
+
+#[derive(Debug)]
+pub struct BooleanLiteral {
+    token: Token,
+    value: bool,
+}
+
+impl BooleanLiteral {
+    pub fn new(value: bool) -> Self {
+        Self {
+            token: Token::word(value.to_string()),
+            value,
+        }
+    }
+
+    pub fn value(&self) -> bool {
+        self.value
+    }
+}
+
+impl TryFrom<Token> for BooleanLiteral {
+    type Error = ();
+
+    fn try_from(token: Token) -> Result<Self, Self::Error> {
+        let value = match token.kind {
+            TokenKind::True => true,
+            TokenKind::False => false,
+            _ => return Err(()),
+        };
+
+        Ok(Self { token, value })
+    }
+}
+
+impl Display for BooleanLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.token.literal)
+    }
+}
+
+impl Node for BooleanLiteral {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+
+impl Expression for BooleanLiteral {}

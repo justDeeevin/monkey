@@ -4,8 +4,8 @@ use std::str::FromStr;
 
 use crate::{
     ast::{
-        ExpressionStatement, Identifier, InfixExpression, IntegerLiteral, LetStatement,
-        PrefixExpression, Program, ReturnStatement,
+        BooleanLiteral, ExpressionStatement, Identifier, InfixExpression, IntegerLiteral,
+        IntegerLiteralConstructionError, LetStatement, PrefixExpression, Program, ReturnStatement,
         traits::{Expression, Statement},
     },
     lexer::Lexer,
@@ -96,7 +96,7 @@ impl Parser {
 
         self.expect_peek(Ident)?;
 
-        let name = Identifier::from_token(self.current_clone()?);
+        let name = Identifier::try_from(self.current_clone()?).unwrap();
 
         self.expect_peek(Assign)?;
 
@@ -145,8 +145,12 @@ impl Parser {
     fn parse_prefix(&mut self) -> Result<Option<Box<dyn Expression>>, ParseError> {
         let current = self.current_clone()?;
         Ok(match current.kind {
-            Ident => Some(Box::new(Identifier::from_token(current))),
-            Int => Some(Box::new(IntegerLiteral::from_token(current)?)),
+            Ident => Some(Box::new(Identifier::try_from(current).unwrap())),
+            Int => match IntegerLiteral::try_from(current) {
+                Ok(lit) => Some(Box::new(lit)),
+                Err(IntegerLiteralConstructionError::NonInt) => unreachable!(),
+                Err(IntegerLiteralConstructionError::ParseInt(e)) => return Err(e.into()),
+            },
             Not | Minus => {
                 self.next_token();
                 Some(Box::new(PrefixExpression {
@@ -154,6 +158,13 @@ impl Parser {
                     token: current,
                     right: self.parse_expression(ExpressionKind::Prefix)?,
                 }))
+            }
+            True | False => Some(Box::new(BooleanLiteral::try_from(current).unwrap())),
+            LParen => {
+                self.next_token();
+                let exp = self.parse_expression(ExpressionKind::Lowest)?;
+                self.expect_peek(RParen)?;
+                Some(exp)
             }
             _ => None,
         })
