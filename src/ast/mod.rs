@@ -319,7 +319,7 @@ impl Display for IfExpression {
         write!(f, "if {} {}", self.cond, self.cons)?;
 
         if let Some(alternative) = &self.alternative {
-            write!(f, "else {alternative}")?;
+            write!(f, " else {alternative}")?;
         }
 
         Ok(())
@@ -342,11 +342,11 @@ pub struct BlockStatement {
 
 impl Display for BlockStatement {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{ ")?;
         for statement in &self.statements {
             write!(f, "{statement}")?;
         }
-
-        Ok(())
+        write!(f, " }}")
     }
 }
 
