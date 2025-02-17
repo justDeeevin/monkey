@@ -4,8 +4,9 @@ use std::any::Any;
 
 use crate::{
     ast::{
-        BooleanLiteral, ExpressionStatement, Identifier, IfExpression, InfixExpression, Integer,
-        IntegerLiteral, LetStatement, PrefixExpression, Program, ReturnStatement,
+        BooleanLiteral, ExpressionStatement, FunctionLiteral, Identifier, IfExpression,
+        InfixExpression, Integer, IntegerLiteral, LetStatement, PrefixExpression, Program,
+        ReturnStatement,
         traits::{Expression, Node},
     },
     token::Token,
@@ -19,15 +20,7 @@ fn let_statements() {
         let foobar = 838383;
     "#;
 
-    let program = match input.parse::<Program>() {
-        Ok(program) => program,
-        Err(e) => {
-            panic!("Failed to parse program: {e}");
-        }
-    };
-
-    // Subtract 2 for the start and end newlines in the input
-    assert_eq!(program.statements.len(), input.lines().count() - 2);
+    let program = new_program(input, input.lines().count() - 2);
 
     let test_idents = ["x", "y", "foobar"];
 
@@ -51,14 +44,7 @@ fn return_statements() {
         return 993322;
     "#;
 
-    let program = match input.parse::<Program>() {
-        Ok(program) => program,
-        Err(e) => {
-            panic!("Failed to parse program: {e}");
-        }
-    };
-
-    assert_eq!(program.statements.len(), input.lines().count() - 2);
+    let program = new_program(input, input.lines().count() - 2);
     for statement in program.statements {
         let return_statement = statement
             .downcast_ref::<ReturnStatement>()
@@ -81,13 +67,7 @@ fn format() {
 #[test]
 fn ident_expr() {
     let input = "foobar;";
-    let program = match input.parse::<Program>() {
-        Ok(program) => program,
-        Err(e) => {
-            panic!("Failed to parse program: {e}");
-        }
-    };
-    assert_eq!(program.statements.len(), 1);
+    let program = new_program(input, 1);
 
     let ident = program.statements[0]
         .downcast_ref::<ExpressionStatement>()
@@ -103,13 +83,7 @@ fn ident_expr() {
 #[test]
 fn int_literal() {
     let input = "5;";
-    let program = match input.parse::<Program>() {
-        Ok(program) => program,
-        Err(e) => {
-            panic!("Failed to parse program: {e}");
-        }
-    };
-    assert_eq!(program.statements.len(), 1);
+    let program = new_program(input, 1);
 
     let int = program.statements[0]
         .downcast_ref::<ExpressionStatement>()
@@ -127,14 +101,7 @@ fn prefix_expr() {
     let integer_inputs = [("!5;", '!', 5), ("-15;", '-', 15)];
 
     for (input, operator, expected) in integer_inputs {
-        let program = match input.parse::<Program>() {
-            Ok(program) => program,
-            Err(e) => {
-                panic!("Failed to parse program: {e}");
-            }
-        };
-
-        assert_eq!(program.statements.len(), 1);
+        let program = new_program(input, 1);
 
         let prefix_expr = program.statements[0]
             .downcast_ref::<ExpressionStatement>()
@@ -150,14 +117,7 @@ fn prefix_expr() {
 
     let boolean_inputs = [("!true;", '!', true), ("!false;", '!', false)];
     for (input, operator, expected) in boolean_inputs {
-        let program = match input.parse::<Program>() {
-            Ok(program) => program,
-            Err(e) => {
-                panic!("Failed to parse program: {e}");
-            }
-        };
-
-        assert_eq!(program.statements.len(), 1);
+        let program = new_program(input, 1);
 
         let prefix_expr = program.statements[0]
             .downcast_ref::<ExpressionStatement>()
@@ -231,14 +191,7 @@ fn infix_expr() {
     ];
 
     for (input, left, operator, right) in integer_inputs {
-        let program = match input.parse::<Program>() {
-            Ok(program) => program,
-            Err(e) => {
-                panic!("Failed to parse program: {e}");
-            }
-        };
-
-        assert_eq!(program.statements.len(), 1);
+        let program = new_program(input, 1);
 
         let expr = &program.statements[0]
             .downcast_ref::<ExpressionStatement>()
@@ -259,14 +212,7 @@ fn infix_expr() {
     ];
 
     for (input, left, operator, right) in boolean_inputs {
-        let program = match input.parse::<Program>() {
-            Ok(program) => program,
-            Err(e) => {
-                panic!("Failed to parse program: {e}");
-            }
-        };
-
-        assert_eq!(program.statements.len(), 1);
+        let program = new_program(input, 1);
 
         let expr = &program.statements[0]
             .downcast_ref::<ExpressionStatement>()
@@ -320,13 +266,7 @@ fn pemdas() {
 #[test]
 fn bool_literal() {
     let input = "true;";
-    let program = match input.parse::<Program>() {
-        Ok(program) => program,
-        Err(e) => {
-            panic!("Failed to parse program: {e}");
-        }
-    };
-    assert_eq!(program.statements.len(), 1);
+    let program = new_program(input, 1);
 
     let bool_literal = program.statements[0]
         .downcast_ref::<ExpressionStatement>()
@@ -342,12 +282,7 @@ fn bool_literal() {
 #[test]
 fn if_expr() {
     let input = "if (x < y) { x };";
-    let program = match input.parse::<Program>() {
-        Ok(program) => program,
-        Err(e) => panic!("Failed to parse program: {e}"),
-    };
-
-    assert_eq!(program.statements.len(), 1);
+    let program = new_program(input, 1);
     let if_expr = program.statements[0]
         .downcast_ref::<ExpressionStatement>()
         .expect("Could not downcast to expression statement")
@@ -368,12 +303,7 @@ fn if_expr() {
 #[test]
 fn if_else_expr() {
     let input = "if (x < y) { x } else { y };";
-    let program = match input.parse::<Program>() {
-        Ok(program) => program,
-        Err(e) => panic!("Failed to parse program: {e}"),
-    };
-
-    assert_eq!(program.statements.len(), 1);
+    let program = new_program(input, 1);
 
     let if_expr = program.statements[0]
         .downcast_ref::<ExpressionStatement>()
@@ -397,4 +327,63 @@ fn if_else_expr() {
         .downcast_ref::<ExpressionStatement>()
         .expect("Could not downcast to expression statement");
     test_identifier(alternative.expression.as_ref(), &"y");
+}
+
+#[test]
+fn function_literal() {
+    let input = "fn(x, y) { x + y; };";
+
+    let program = new_program(input, 1);
+    let fn_expr = program.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<FunctionLiteral>()
+        .expect("Could not downcast to function literal");
+
+    assert_eq!(fn_expr.parameters.len(), 2);
+    test_literal(&fn_expr.parameters[0], &"x");
+    test_literal(&fn_expr.parameters[1], &"y");
+    assert_eq!(fn_expr.body.statements.len(), 1);
+    let body_statement = fn_expr.body.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement");
+    test_infix(body_statement.expression.as_ref(), &"x", "+", &"y");
+}
+
+#[test]
+fn fn_params() {
+    let input: [(&str, &[&str]); 3] = [
+        ("fn() {};", &[]),
+        ("fn(x) {};", &["x"]),
+        ("fn(x, y, z) {};", &["x", "y", "z"]),
+    ];
+
+    for (input, expected) in input {
+        let program = new_program(input, 1);
+        let fn_expr = program.statements[0]
+            .downcast_ref::<ExpressionStatement>()
+            .expect("Could not downcast to expression statement")
+            .expression
+            .downcast_ref::<FunctionLiteral>()
+            .expect("Could not downcast to function literal");
+
+        assert_eq!(fn_expr.parameters.len(), expected.len());
+        for (i, param) in fn_expr.parameters.iter().enumerate() {
+            assert_eq!(param.value(), expected[i]);
+        }
+    }
+}
+
+fn new_program(input: &str, expected_statements: usize) -> Program {
+    let program = match input.parse::<Program>() {
+        Ok(program) => program,
+        Err(e) => {
+            panic!("Failed to parse program: {e}");
+        }
+    };
+
+    assert_eq!(program.statements.len(), expected_statements);
+
+    program
 }

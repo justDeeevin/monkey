@@ -4,9 +4,9 @@ use std::str::FromStr;
 
 use crate::{
     ast::{
-        BlockStatement, BooleanLiteral, ExpressionStatement, Identifier, IfExpression,
-        InfixExpression, IntegerLiteral, IntegerLiteralConstructionError, LetStatement,
-        PrefixExpression, Program, ReturnStatement,
+        BlockStatement, BooleanLiteral, ExpressionStatement, FunctionLiteral, Identifier,
+        IfExpression, InfixExpression, IntegerLiteral, IntegerLiteralConstructionError,
+        LetStatement, PrefixExpression, Program, ReturnStatement,
         traits::{Expression, Statement},
     },
     lexer::Lexer,
@@ -160,7 +160,7 @@ impl Parser {
                     right: self.parse_expression(ExpressionKind::Prefix)?,
                 }))
             }
-            True | False => Some(Box::new(BooleanLiteral::try_from(current).unwrap())),
+            True | False => Some(Box::new(BooleanLiteral::try_from(current)?)),
             LParen => {
                 self.next_token();
                 let exp = self.parse_expression(ExpressionKind::Lowest)?;
@@ -195,8 +195,41 @@ impl Parser {
                     alternative,
                 }))
             }
+            Fn => {
+                let token = self.current_clone()?;
+                self.expect_peek(LParen)?;
+                let parameters = self.parse_fn_params()?;
+                self.expect_peek(LBrace)?;
+                let body = self.parse_block_statement()?;
+                Some(Box::new(FunctionLiteral {
+                    token,
+                    parameters,
+                    body,
+                }))
+            }
             _ => None,
         })
+    }
+
+    fn parse_fn_params(&mut self) -> Result<Vec<Identifier>, ParseError> {
+        let mut out = Vec::new();
+        self.next_token();
+        if self.current_ref()?.kind == RParen {
+            return Ok(out);
+        }
+        let current = self.current_clone()?;
+        out.push(Identifier::try_from(current.clone())?);
+        while self.peek_ref()?.kind == Comma {
+            self.next_token();
+            self.next_token();
+            out.push({
+                let token = self.current_clone()?;
+                Identifier::try_from(token.clone())?
+            })
+        }
+
+        self.expect_peek(RParen)?;
+        Ok(out)
     }
 
     fn parse_block_statement(&mut self) -> Result<BlockStatement, ParseError> {
@@ -241,12 +274,7 @@ impl FromStr for Program {
         while parser.current.is_some() {
             match parser.parse_statement() {
                 Ok(statement) => statements.push(statement),
-                Err(err) => {
-                    errors.push(err);
-                    if let Err(e) = parser.skip_to_semi() {
-                        errors.push(e);
-                    };
-                }
+                Err(err) => errors.push(err),
             }
             parser.next_token();
         }

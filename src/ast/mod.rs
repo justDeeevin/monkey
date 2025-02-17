@@ -1,7 +1,10 @@
 pub mod traits;
 use traits::*;
 
-use crate::token::{Token, TokenKind};
+use crate::{
+    parser::ParseError,
+    token::{Token, TokenKind},
+};
 
 use std::{fmt::Display, rc::Rc};
 
@@ -78,11 +81,14 @@ impl Identifier {
 }
 
 impl TryFrom<Token> for Identifier {
-    type Error = ();
+    type Error = ParseError;
 
     fn try_from(token: Token) -> Result<Self, Self::Error> {
         if token.kind != TokenKind::Ident {
-            return Err(());
+            return Err(ParseError::Unexpected {
+                given: token,
+                expected: TokenKind::Ident,
+            });
         }
 
         Ok(Self {
@@ -268,13 +274,18 @@ impl BooleanLiteral {
 }
 
 impl TryFrom<Token> for BooleanLiteral {
-    type Error = ();
+    type Error = ParseError;
 
     fn try_from(token: Token) -> Result<Self, Self::Error> {
-        let value = match token.kind {
+        let value = match &token.kind {
             TokenKind::True => true,
             TokenKind::False => false,
-            _ => return Err(()),
+            _ => {
+                return Err(ParseError::Unexpected {
+                    given: token,
+                    expected: TokenKind::True,
+                });
+            }
         };
 
         Ok(Self { token, value })
@@ -346,3 +357,30 @@ impl Node for BlockStatement {
 }
 
 impl Statement for BlockStatement {}
+
+#[derive(Debug)]
+pub struct FunctionLiteral {
+    pub token: Token,
+    pub parameters: Vec<Identifier>,
+    pub body: BlockStatement,
+}
+
+impl Display for FunctionLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}(", self.token_literal())?;
+        for param in &self.parameters {
+            write!(f, "{param}, ")?;
+        }
+        write!(f, ") {}", self.body)?;
+
+        Ok(())
+    }
+}
+
+impl Node for FunctionLiteral {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+
+impl Expression for FunctionLiteral {}

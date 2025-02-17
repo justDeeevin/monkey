@@ -159,8 +159,7 @@ impl Display for TokenKind {
             Self::Else => "else",
             Self::Return => "return",
 
-            Self::True => "true",
-            Self::False => "false",
+            Self::True | Self::False => "boolean literal",
             Self::Int => "integer",
 
             Self::Ident => "identifier",
@@ -177,9 +176,9 @@ impl Display for TokenKind {
             Self::Assign => "assign",
 
             Self::LParen => "open parenthesis",
-            Self::RParen => "close parenthesis",
+            Self::RParen => "closing parenthesis",
             Self::LBrace => "open brace",
-            Self::RBrace => "close brace",
+            Self::RBrace => "closing brace",
 
             Self::Comma => "comma",
 
