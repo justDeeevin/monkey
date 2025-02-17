@@ -35,7 +35,7 @@ fn int() {
 fn test_int(object: &dyn Object, expected: Int) {
     let int = object
         .downcast_ref::<Integer>()
-        .expect("Could not downcast to integer object");
+        .expect(format!("Could not downcast to integer object, got {:?}", object).as_str());
     assert_eq!(int.value, expected);
 }
 
@@ -52,6 +52,15 @@ fn bool() {
         ("1 != 1", false),
         ("1 == 2", false),
         ("1 != 2", true),
+        ("true == true", true),
+        ("false == false", true),
+        ("true == false", false),
+        ("true != false", true),
+        ("false != true", true),
+        ("(1 < 2) == true", true),
+        ("(1 < 2) == false", false),
+        ("(1 > 2) == true", false),
+        ("(1 > 2) == false", true),
     ];
     for (input, expected) in tests {
         let eval = eval(&new_program(input, 1));
@@ -62,7 +71,7 @@ fn bool() {
 fn test_bool(object: &dyn Object, expected: bool) {
     let bool = object
         .downcast_ref::<Boolean>()
-        .expect("Could not downcast to boolean object");
+        .expect(format!("Could not downcast to boolean object, got {:?}", object).as_str());
     assert_eq!(bool.value, expected);
 }
 

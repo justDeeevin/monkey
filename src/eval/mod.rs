@@ -73,14 +73,29 @@ fn eval_infix(
     left: Box<dyn Object>,
     right: Box<dyn Object>,
 ) -> Box<dyn Object> {
-    let (Some(left), Some(right)) = (
+    if let (Some(left), Some(right)) = (
         left.downcast_ref::<Integer>(),
         right.downcast_ref::<Integer>(),
-    ) else {
-        return Box::new(Null);
-    };
-
-    eval_int_infix(operator, left, right)
+    ) {
+        eval_int_infix(operator, left, right)
+    } else if let (Some(left), Some(right)) = (
+        left.downcast_ref::<Boolean>(),
+        right.downcast_ref::<Boolean>(),
+    ) {
+        match operator.as_ref() {
+            "==" => Box::new(Boolean {
+                value: left.value == right.value,
+            }),
+            "!=" => Box::new(Boolean {
+                value: left.value != right.value,
+            }),
+            _ => Box::new(Null),
+        }
+    } else if left.downcast_ref::<Null>().is_some() && right.downcast_ref::<Null>().is_some() {
+        Box::new(TRUE)
+    } else {
+        Box::new(Null)
+    }
 }
 
 fn eval_int_infix(operator: impl AsRef<str>, left: &Integer, right: &Integer) -> Box<dyn Object> {
