@@ -11,6 +11,26 @@ use object::Environment;
 use rustyline::error::ReadlineError;
 
 fn main() {
+    if let Some(file) = std::env::args().nth(1) {
+        let contents = std::fs::read_to_string(file).unwrap();
+        let program = match contents.parse::<Program>() {
+            Ok(program) => program,
+            Err(e) => {
+                eprintln!("{e}");
+                return;
+            }
+        };
+        let eval = match eval(&program, &mut Environment::default()) {
+            Ok(eval) => eval,
+            Err(e) => {
+                eprintln!("{e}");
+                return;
+            }
+        };
+        println!("{}", eval);
+        return;
+    }
+
     println!("Monkey REPL");
     println!("Ctrl-D to exit");
     let mut rl = rustyline::DefaultEditor::new().unwrap();
