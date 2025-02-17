@@ -119,3 +119,31 @@ fn test_null(object: &dyn Object) {
         .downcast_ref::<Null>()
         .expect(format!("Could not downcast to null object, got {:?}", object).as_str());
 }
+
+#[test]
+fn return_statements() {
+    let tests = [
+        (1, "return 10;", 10),
+        (2, "return 10; 9;", 10),
+        (2, "return 2 * 5; 9;", 10),
+        (3, "9; return 2 * 5; 9;", 10),
+        (
+            1,
+            r#"
+            if (10 > 1) {
+                if (10 > 1) {
+                    return 10;
+                }
+
+                return 1;
+            }
+        "#,
+            10,
+        ),
+    ];
+
+    for (n_statements, input, expected) in tests {
+        let eval = eval(&new_program(input, n_statements));
+        test_int(eval.as_ref(), expected);
+    }
+}

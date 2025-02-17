@@ -3,10 +3,10 @@ mod test;
 use crate::{
     ast::{
         BlockStatement, BooleanLiteral, ExpressionStatement, IfExpression, InfixExpression,
-        IntegerLiteral, PrefixExpression, Program,
+        IntegerLiteral, PrefixExpression, Program, ReturnStatement,
         traits::{Node, Statement},
     },
-    object::{Boolean, Integer, Null, traits::Object},
+    object::{Boolean, Integer, Null, ReturnValue, traits::Object},
 };
 
 const TRUE: Boolean = Boolean { value: true };
@@ -14,7 +14,7 @@ const FALSE: Boolean = Boolean { value: false };
 
 pub fn eval(root: &dyn Node) -> Box<dyn Object> {
     if let Some(program) = root.downcast_ref::<Program>() {
-        eval_statements(&program.statements)
+        eval_program(&program.statements)
     } else if let Some(expr) = root.downcast_ref::<ExpressionStatement>() {
         eval(expr.expression.as_ref())
     } else if let Some(int) = root.downcast_ref::<IntegerLiteral>() {
@@ -31,18 +31,40 @@ pub fn eval(root: &dyn Node) -> Box<dyn Object> {
         let right = eval(infix.right.as_ref());
         eval_infix(&infix.operator, left, right)
     } else if let Some(block) = root.downcast_ref::<BlockStatement>() {
-        eval_statements(&block.statements)
+        eval_block(&block.statements)
     } else if let Some(if_expr) = root.downcast_ref::<IfExpression>() {
         eval_if(if_expr)
+    } else if let Some(return_statement) = root.downcast_ref::<ReturnStatement>() {
+        Box::new(ReturnValue {
+            value: eval(return_statement.value.as_ref()),
+        })
     } else {
         todo!()
     }
 }
 
-fn eval_statements(statements: &[Box<dyn Statement>]) -> Box<dyn Object> {
+fn eval_block(statements: &[Box<dyn Statement>]) -> Box<dyn Object> {
+    let mut out = None;
+    for statement in statements {
+        out = Some(eval(statement.as_ref()));
+        if out
+            .as_ref()
+            .map(|o| o.downcast_ref::<ReturnValue>().is_some())
+            == Some(true)
+        {
+            return out.unwrap();
+        }
+    }
+    out.unwrap_or(Box::new(Null))
+}
+
+fn eval_program(statements: &[Box<dyn Statement>]) -> Box<dyn Object> {
     let mut out: Box<dyn Object> = Box::new(Null);
     for statement in statements {
         out = eval(statement.as_ref());
+        if out.downcast_ref::<ReturnValue>().is_some() {
+            return out.downcast::<ReturnValue>().unwrap().value;
+        }
     }
     out
 }

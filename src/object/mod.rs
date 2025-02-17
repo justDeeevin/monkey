@@ -53,3 +53,20 @@ impl Object for Null {
         false
     }
 }
+
+#[derive(Debug)]
+pub struct ReturnValue {
+    pub value: Box<dyn Object>,
+}
+
+impl Display for ReturnValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", self.value)
+    }
+}
+
+impl Object for ReturnValue {
+    fn truthy(&self) -> bool {
+        self.value.truthy()
+    }
+}
