@@ -1,6 +1,6 @@
 #![cfg(test)]
 
-use super::eval;
+use super::{EvalError, eval};
 use crate::{
     ast::Integer as Int,
     object::{Boolean, Function, Integer, Null, Scope, String as StringObject, traits::Object},
@@ -9,7 +9,7 @@ use crate::{
 
 fn new_eval(input: &str, expected_statements: usize) -> Box<dyn Object> {
     let program = new_program(input, expected_statements);
-    match eval(&program, &mut Scope::default()) {
+    match eval(&program, &mut Scope::empty()) {
         Ok(eval) => eval,
         Err(e) => {
             panic!("Failed to eval program: {e}");
@@ -224,4 +224,54 @@ fn concat_string() {
         .downcast_ref::<StringObject>()
         .expect("Could not downcast to string");
     assert_eq!(string.value.as_ref(), "droddyrox");
+}
+
+#[test]
+fn len() {
+    let tests = [
+        ("len(\"\")", Ok(0)),
+        ("len(\"four\")", Ok(4)),
+        ("len(\"droddyrox\")", Ok(9)),
+        (
+            "len(1)",
+            Err(EvalError::BadType {
+                expected: "string".to_string(),
+                got: "integer".to_string(),
+            }
+            .to_string()),
+        ),
+        (
+            "len(\"one\", \"two\")",
+            Err(EvalError::BadArity {
+                expected: 1,
+                got: 2,
+            }
+            .to_string()),
+        ),
+    ];
+
+    for (input, expected) in tests {
+        let program = new_program(input, 1);
+        let mut scope = Scope::new();
+        let eval = eval(&program, &mut scope);
+        match expected {
+            Ok(expected) => {
+                let len = match eval {
+                    Ok(len) => len,
+                    Err(e) => {
+                        panic!("Error evaluating: {}", e);
+                    }
+                };
+                test_int(len.as_ref(), expected);
+            }
+
+            Err(e) => {
+                let Err(EvalError::Many(errors)) = eval else {
+                    panic!("Expected errors, got {:?}", eval);
+                };
+                assert_eq!(errors.len(), 1);
+                assert_eq!(errors[0].to_string(), e);
+            }
+        }
+    }
 }

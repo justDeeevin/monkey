@@ -1,3 +1,4 @@
+mod intrinsics;
 mod test;
 
 use crate::{
@@ -8,16 +9,31 @@ use crate::{
         traits::{Expression, Node, Statement},
     },
     object::{
-        Boolean, Function, Integer, Null, ReturnValue, Scope, String as StringObject,
+        Boolean, Function, Integer, Intrinsic, Null, ReturnValue, Scope, String as StringObject,
         traits::Object,
     },
 };
-use std::rc::Rc;
+use std::{
+    ops::{Deref, DerefMut},
+    rc::Rc,
+};
 
 const TRUE: Boolean = Boolean { value: true };
 const FALSE: Boolean = Boolean { value: false };
 
-type Result<T> = std::result::Result<T, EvalError>;
+pub type Result<T> = std::result::Result<T, EvalError>;
+
+pub fn intrinsics() -> Scope {
+    let mut scope = Scope::empty();
+    scope.insert(
+        "len".into(),
+        Box::new(Intrinsic {
+            function: intrinsics::len,
+        }),
+    );
+
+    scope
+}
 
 #[derive(Debug, thiserror::Error)]
 pub enum EvalError {
@@ -38,10 +54,28 @@ pub enum EvalError {
     NotFound(Rc<str>),
     #[error("Cannot call {0}")]
     CannotCall(Box<dyn Object>),
+    #[error("Expected type {expected}, got {got}")]
+    BadType { expected: String, got: String },
+    #[error("Expected {expected} arguments, got {got}")]
+    BadArity { expected: usize, got: usize },
 }
 
 #[derive(Debug, thiserror::Error)]
 pub struct EvalErrorList(Vec<EvalError>);
+
+impl Deref for EvalErrorList {
+    type Target = Vec<EvalError>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl DerefMut for EvalErrorList {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
 
 impl std::fmt::Display for EvalErrorList {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -112,6 +146,9 @@ pub fn eval(root: &dyn Node, scope: &mut Scope) -> Result<Box<dyn Object>> {
 }
 
 fn call_function(function: Box<dyn Object>, args: &[Box<dyn Object>]) -> Result<Box<dyn Object>> {
+    if let Some(intrinsic) = function.downcast_ref::<Intrinsic>() {
+        return (intrinsic.function)(args);
+    }
     let mut function = function
         .downcast::<Function>()
         .map_err(EvalError::CannotCall)?;
@@ -123,7 +160,8 @@ fn call_function(function: Box<dyn Object>, args: &[Box<dyn Object>]) -> Result<
             .map(|(i, a)| (i.value().into(), a.clone())),
     );
     if let Some(name) = function.name.clone() {
-        function.scope.insert(name.value().into(), function.clone());
+        let cloned = function.clone();
+        function.scope.insert(name.value().into(), cloned);
     }
     let eval = eval(&function.body, &mut function.scope.clone())?;
     match eval.downcast::<ReturnValue>() {

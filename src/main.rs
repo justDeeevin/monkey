@@ -20,7 +20,7 @@ fn main() {
                 return;
             }
         };
-        let eval = match eval(&program, &mut Scope::default()) {
+        let eval = match eval(&program, &mut Scope::new()) {
             Ok(eval) => eval,
             Err(e) => {
                 eprintln!("{e}");
