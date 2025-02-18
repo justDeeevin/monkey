@@ -75,6 +75,7 @@ pub type Scope = HashMap<Rc<str>, Box<dyn Object>>;
 
 #[derive(Debug, Clone)]
 pub struct Function {
+    pub name: Option<Identifier>,
     pub parameters: Vec<Identifier>,
     pub body: BlockStatement,
     pub scope: Scope,

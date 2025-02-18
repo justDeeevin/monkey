@@ -76,13 +76,17 @@ pub fn eval(root: &dyn Node, scope: &mut Scope) -> Result<Box<dyn Object>> {
             value: eval(return_statement.value.as_ref(), scope)?,
         }))
     } else if let Some(let_statement) = root.downcast_ref::<LetStatement>() {
-        let value = eval(let_statement.value.as_ref(), scope)?;
+        let mut value = eval(let_statement.value.as_ref(), scope)?;
+        if let Some(function) = value.downcast_mut::<Function>() {
+            function.name = Some(let_statement.name.clone());
+        }
         scope.insert(let_statement.name.value().into(), value);
         Ok(Box::new(Null))
     } else if let Some(identifier) = root.downcast_ref::<Identifier>() {
         eval_ident(identifier, scope)
     } else if let Some(function) = root.downcast_ref::<FunctionLiteral>() {
         Ok(Box::new(Function {
+            name: None,
             parameters: function.parameters.clone(),
             body: function.body.clone(),
             scope: scope.clone(),
@@ -107,6 +111,9 @@ fn call_function(function: Box<dyn Object>, args: &[Box<dyn Object>]) -> Result<
             .zip(args)
             .map(|(i, a)| (i.value().into(), a.clone())),
     );
+    if let Some(name) = function.name.clone() {
+        function.scope.insert(name.value().into(), function.clone());
+    }
     let eval = eval(&function.body, &mut function.scope.clone())?;
     match eval.downcast::<ReturnValue>() {
         Ok(return_value) => Ok(return_value.value),
