@@ -3,13 +3,13 @@
 use super::eval;
 use crate::{
     ast::Integer as Int,
-    object::{Boolean, Environment, Integer, Null, traits::Object},
+    object::{Boolean, Function, Integer, Null, Scope, traits::Object},
     parser::test::new_program,
 };
 
 fn new_eval(input: &str, expected_statements: usize) -> Box<dyn Object> {
     let program = new_program(input, expected_statements);
-    match eval(&program, &mut Environment::default()) {
+    match eval(&program, &mut Scope::default()) {
         Ok(eval) => eval,
         Err(e) => {
             panic!("Failed to eval program: {e}");
@@ -165,6 +165,39 @@ fn let_statements() {
         (2, "let a = 5 * 5; a;", 25),
         (3, "let a = 5; let b = a; b;", 5),
         (4, "let a = 5; let b = a; let c = a + b + 5; c;", 15),
+    ];
+
+    for (n_statements, input, expected) in tests {
+        let eval = new_eval(input, n_statements);
+        test_int(eval.as_ref(), expected);
+    }
+}
+
+#[test]
+fn function() {
+    let input = "fn(x) { x + 2; };";
+    let eval = new_eval(input, 1);
+    let function = eval
+        .downcast_ref::<Function>()
+        .unwrap_or_else(|| panic!("Could not downcast to function, got {:?}", eval));
+    assert_eq!(function.parameters.len(), 1);
+    assert_eq!(function.parameters[0].value(), "x");
+    assert_eq!(function.body.to_string(), "{ (x + 2); }");
+}
+
+#[test]
+fn call() {
+    let tests = [
+        (2, "let identity = fn(x) { x; }; identity(5);", 5),
+        (2, "let identity = fn(x) { return x; }; identity(5);", 5),
+        (2, "let double = fn(x) { x * 2; }; double(5);", 10),
+        (2, "let add = fn(x, y) { x + y; }; add(5, 5);", 10),
+        (
+            2,
+            "let add = fn(x, y) { x + y; }; add(5 + 5, add(5, 5));",
+            20,
+        ),
+        (1, "fn(x) { x; }(5)", 5),
     ];
 
     for (n_statements, input, expected) in tests {

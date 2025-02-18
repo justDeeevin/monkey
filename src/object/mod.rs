@@ -2,7 +2,7 @@ pub mod traits;
 
 use std::{collections::HashMap, fmt::Display, rc::Rc};
 
-use crate::ast::Integer as Int;
+use crate::ast::{BlockStatement, Identifier, Integer as Int};
 use traits::Object;
 
 #[derive(Debug, Clone)]
@@ -71,19 +71,36 @@ impl Object for ReturnValue {
     }
 }
 
-#[derive(Default, Clone)]
-pub struct Environment(HashMap<Rc<str>, Box<dyn Object>>);
+pub type Scope = HashMap<Rc<str>, Box<dyn Object>>;
 
-impl std::ops::Deref for Environment {
-    type Target = HashMap<Rc<str>, Box<dyn Object>>;
+#[derive(Debug, Clone)]
+pub struct Function {
+    pub parameters: Vec<Identifier>,
+    pub body: BlockStatement,
+    pub scope: Scope,
+}
 
-    fn deref(&self) -> &Self::Target {
-        &self.0
+impl Display for Function {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "fn(")?;
+        for param in self.parameters.iter().take(self.parameters.len() - 1) {
+            write!(f, "{param}, ")?;
+        }
+
+        write!(
+            f,
+            "{}) {{\n {}\n}}",
+            self.parameters
+                .last()
+                .map(|i| i.to_string())
+                .unwrap_or_default(),
+            self.body,
+        )
     }
 }
 
-impl std::ops::DerefMut for Environment {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.0
+impl Object for Function {
+    fn truthy(&self) -> bool {
+        true
     }
 }

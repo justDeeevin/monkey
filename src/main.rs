@@ -7,7 +7,7 @@ mod token;
 
 use ast::Program;
 use eval::eval;
-use object::Environment;
+use object::Scope;
 use rustyline::error::ReadlineError;
 
 fn main() {
@@ -20,7 +20,7 @@ fn main() {
                 return;
             }
         };
-        let eval = match eval(&program, &mut Environment::default()) {
+        let eval = match eval(&program, &mut Scope::default()) {
             Ok(eval) => eval,
             Err(e) => {
                 eprintln!("{e}");
@@ -34,7 +34,7 @@ fn main() {
     println!("Monkey REPL");
     println!("Ctrl-D to exit");
     let mut rl = rustyline::DefaultEditor::new().unwrap();
-    let mut env = Environment::default();
+    let mut env = Scope::default();
     loop {
         match rl.readline(">> ") {
             Ok(line) => {

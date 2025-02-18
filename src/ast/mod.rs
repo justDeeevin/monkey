@@ -12,7 +12,7 @@ use std::{fmt::Display, rc::Rc};
 // This seems good for now.
 pub type Integer = i64;
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Program {
     pub statements: Vec<Box<dyn Statement>>,
 }
@@ -41,7 +41,7 @@ impl Node for Program {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct LetStatement {
     pub token: Token,
     pub name: Identifier,
@@ -61,7 +61,7 @@ impl Node for LetStatement {
 }
 impl Statement for LetStatement {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Identifier {
     token: Token,
     value: Rc<str>,
@@ -112,7 +112,7 @@ impl Node for Identifier {
 }
 impl Expression for Identifier {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ReturnStatement {
     pub token: Token,
     pub value: Box<dyn Expression>,
@@ -131,7 +131,7 @@ impl Node for ReturnStatement {
 }
 impl Statement for ReturnStatement {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct ExpressionStatement {
     pub token: Token,
     pub expression: Box<dyn Expression>,
@@ -150,7 +150,7 @@ impl Node for ExpressionStatement {
 }
 impl Statement for ExpressionStatement {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IntegerLiteral {
     token: Token,
     value: Integer,
@@ -212,7 +212,7 @@ impl Node for IntegerLiteral {
 
 impl Expression for IntegerLiteral {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct PrefixExpression {
     pub token: Token,
     pub operator: char,
@@ -233,7 +233,7 @@ impl Node for PrefixExpression {
 
 impl Expression for PrefixExpression {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct InfixExpression {
     pub token: Token,
     pub left: Box<dyn Expression>,
@@ -255,7 +255,7 @@ impl Node for InfixExpression {
 
 impl Expression for InfixExpression {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BooleanLiteral {
     token: Token,
     value: bool,
@@ -307,7 +307,7 @@ impl Node for BooleanLiteral {
 
 impl Expression for BooleanLiteral {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct IfExpression {
     pub token: Token,
     pub cond: Box<dyn Expression>,
@@ -335,7 +335,7 @@ impl Node for IfExpression {
 
 impl Expression for IfExpression {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockStatement {
     pub token: Token,
     pub statements: Vec<Box<dyn Statement>>,
@@ -359,7 +359,7 @@ impl Node for BlockStatement {
 
 impl Statement for BlockStatement {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct FunctionLiteral {
     pub token: Token,
     pub parameters: Vec<Identifier>,
@@ -372,7 +372,15 @@ impl Display for FunctionLiteral {
         for param in self.parameters.iter().take(self.parameters.len() - 1) {
             write!(f, "{param}, ")?;
         }
-        write!(f, "{}) {}", self.parameters.last().unwrap(), self.body)
+        write!(
+            f,
+            "{}) {}",
+            self.parameters
+                .last()
+                .map(|i| i.to_string())
+                .unwrap_or_default(),
+            self.body
+        )
     }
 }
 
@@ -384,7 +392,7 @@ impl Node for FunctionLiteral {
 
 impl Expression for FunctionLiteral {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct CallExpression {
     pub token: Token,
     pub function: Box<dyn Expression>,
@@ -397,7 +405,14 @@ impl Display for CallExpression {
         for arg in self.arguments.iter().take(self.arguments.len() - 1) {
             write!(f, "{arg}, ")?;
         }
-        write!(f, "{})", self.arguments.last().unwrap())
+        write!(
+            f,
+            "{})",
+            self.arguments
+                .last()
+                .map(|e| e.to_string())
+                .unwrap_or_default()
+        )
     }
 }
 

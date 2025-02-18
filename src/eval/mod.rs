@@ -2,11 +2,12 @@ mod test;
 
 use crate::{
     ast::{
-        BlockStatement, BooleanLiteral, ExpressionStatement, Identifier, IfExpression,
-        InfixExpression, IntegerLiteral, LetStatement, PrefixExpression, Program, ReturnStatement,
-        traits::{Node, Statement},
+        BlockStatement, BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral,
+        Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement, PrefixExpression,
+        Program, ReturnStatement,
+        traits::{Expression, Node, Statement},
     },
-    object::{Boolean, Environment, Integer, Null, ReturnValue, traits::Object},
+    object::{Boolean, Function, Integer, Null, ReturnValue, Scope, traits::Object},
 };
 use std::rc::Rc;
 
@@ -32,6 +33,8 @@ pub enum EvalError {
     },
     #[error("Identifier {0} not found")]
     NotFound(Rc<str>),
+    #[error("Cannot call {0}")]
+    CannotCall(Box<dyn Object>),
 }
 
 #[derive(Debug, thiserror::Error)]
@@ -46,11 +49,11 @@ impl std::fmt::Display for EvalErrorList {
     }
 }
 
-pub fn eval(root: &dyn Node, env: &mut Environment) -> Result<Box<dyn Object>> {
+pub fn eval(root: &dyn Node, scope: &mut Scope) -> Result<Box<dyn Object>> {
     if let Some(program) = root.downcast_ref::<Program>() {
-        eval_program(&program.statements, env)
+        eval_program(&program.statements, scope)
     } else if let Some(expr) = root.downcast_ref::<ExpressionStatement>() {
-        eval(expr.expression.as_ref(), env)
+        eval(expr.expression.as_ref(), scope)
     } else if let Some(int) = root.downcast_ref::<IntegerLiteral>() {
         Ok(Box::new(Integer { value: int.value() }))
     } else if let Some(bool) = root.downcast_ref::<BooleanLiteral>() {
@@ -58,32 +61,80 @@ pub fn eval(root: &dyn Node, env: &mut Environment) -> Result<Box<dyn Object>> {
             value: bool.value(),
         }))
     } else if let Some(prefix) = root.downcast_ref::<PrefixExpression>() {
-        let right = eval(prefix.right.as_ref(), env)?;
+        let right = eval(prefix.right.as_ref(), scope)?;
         eval_prefix(prefix.operator, right)
     } else if let Some(infix) = root.downcast_ref::<InfixExpression>() {
-        let left = eval(infix.left.as_ref(), env)?;
-        let right = eval(infix.right.as_ref(), env)?;
+        let left = eval(infix.left.as_ref(), scope)?;
+        let right = eval(infix.right.as_ref(), scope)?;
         eval_infix(&infix.operator, left, right)
     } else if let Some(block) = root.downcast_ref::<BlockStatement>() {
-        eval_block(&block.statements, env)
+        eval_block(&block.statements, scope)
     } else if let Some(if_expr) = root.downcast_ref::<IfExpression>() {
-        eval_if(if_expr, env)
+        eval_if(if_expr, scope)
     } else if let Some(return_statement) = root.downcast_ref::<ReturnStatement>() {
         Ok(Box::new(ReturnValue {
-            value: eval(return_statement.value.as_ref(), env)?,
+            value: eval(return_statement.value.as_ref(), scope)?,
         }))
     } else if let Some(let_statement) = root.downcast_ref::<LetStatement>() {
-        let value = eval(let_statement.value.as_ref(), env)?;
-        env.insert(let_statement.name.value().into(), value);
+        let value = eval(let_statement.value.as_ref(), scope)?;
+        scope.insert(let_statement.name.value().into(), value);
         Ok(Box::new(Null))
     } else if let Some(identifier) = root.downcast_ref::<Identifier>() {
-        eval_ident(identifier, env)
+        eval_ident(identifier, scope)
+    } else if let Some(function) = root.downcast_ref::<FunctionLiteral>() {
+        Ok(Box::new(Function {
+            parameters: function.parameters.clone(),
+            body: function.body.clone(),
+            scope: scope.clone(),
+        }))
+    } else if let Some(call) = root.downcast_ref::<CallExpression>() {
+        let function = eval(call.function.as_ref(), scope)?;
+        let args = eval_expressions(&call.arguments, scope)?;
+        call_function(function, &args)
     } else {
         todo!()
     }
 }
 
-fn eval_ident(identifier: &Identifier, env: &mut Environment) -> Result<Box<dyn Object>> {
+fn call_function(function: Box<dyn Object>, args: &[Box<dyn Object>]) -> Result<Box<dyn Object>> {
+    let mut function = function
+        .downcast::<Function>()
+        .map_err(EvalError::CannotCall)?;
+    function.scope.extend(
+        function
+            .parameters
+            .iter()
+            .zip(args)
+            .map(|(i, a)| (i.value().into(), a.clone())),
+    );
+    let eval = eval(&function.body, &mut function.scope.clone())?;
+    match eval.downcast::<ReturnValue>() {
+        Ok(return_value) => Ok(return_value.value),
+        Err(eval) => Ok(eval),
+    }
+}
+
+fn eval_expressions(
+    expressions: &[Box<dyn Expression>],
+    env: &mut Scope,
+) -> Result<Vec<Box<dyn Object>>> {
+    let mut out = Vec::new();
+    let mut errors = Vec::new();
+    for expression in expressions {
+        match eval(expression.as_ref(), env) {
+            Ok(value) => out.push(value),
+            Err(e) => errors.push(e),
+        }
+    }
+
+    if !errors.is_empty() {
+        Err(EvalError::Many(EvalErrorList(errors)))
+    } else {
+        Ok(out)
+    }
+}
+
+fn eval_ident(identifier: &Identifier, env: &mut Scope) -> Result<Box<dyn Object>> {
     if let Some(value) = env.get(identifier.value()) {
         Ok(value.clone())
     } else {
@@ -91,11 +142,13 @@ fn eval_ident(identifier: &Identifier, env: &mut Environment) -> Result<Box<dyn 
     }
 }
 
-fn eval_block(statements: &[Box<dyn Statement>], env: &mut Environment) -> Result<Box<dyn Object>> {
+fn eval_block(statements: &[Box<dyn Statement>], scope: &mut Scope) -> Result<Box<dyn Object>> {
     let mut out = None;
     let mut errors = Vec::new();
+    // Create a new scope for the block so variables are not leaked
+    let mut scope = scope.clone();
     for statement in statements {
-        match eval(statement.as_ref(), env) {
+        match eval(statement.as_ref(), &mut scope) {
             Ok(value) => out = Some(value),
             Err(e) => errors.push(e),
         }
@@ -114,10 +167,7 @@ fn eval_block(statements: &[Box<dyn Statement>], env: &mut Environment) -> Resul
     }
 }
 
-fn eval_program(
-    statements: &[Box<dyn Statement>],
-    env: &mut Environment,
-) -> Result<Box<dyn Object>> {
+fn eval_program(statements: &[Box<dyn Statement>], env: &mut Scope) -> Result<Box<dyn Object>> {
     let mut out: Box<dyn Object> = Box::new(Null);
     let mut errors = Vec::new();
     for statement in statements {
@@ -251,7 +301,7 @@ fn eval_int_infix(
     })
 }
 
-fn eval_if(if_expr: &IfExpression, env: &mut Environment) -> Result<Box<dyn Object>> {
+fn eval_if(if_expr: &IfExpression, env: &mut Scope) -> Result<Box<dyn Object>> {
     let cond = eval(if_expr.cond.as_ref(), env)?;
     if cond.truthy() {
         eval(&if_expr.cons, env)
