@@ -4,10 +4,13 @@ use crate::{
     ast::{
         BlockStatement, BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral,
         Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement, PrefixExpression,
-        Program, ReturnStatement,
+        Program, ReturnStatement, StringLiteral,
         traits::{Expression, Node, Statement},
     },
-    object::{Boolean, Function, Integer, Null, ReturnValue, Scope, traits::Object},
+    object::{
+        Boolean, Function, Integer, Null, ReturnValue, Scope, String as StringObject,
+        traits::Object,
+    },
 };
 use std::rc::Rc;
 
@@ -100,7 +103,10 @@ pub fn eval(root: &dyn Node, scope: &mut Scope) -> Result<Box<dyn Object>> {
             let function = eval(call.function.as_ref(), scope)?;
             let args = eval_expressions(&call.arguments, scope)?;
             call_function(function, &args)
-        }
+        },
+        string as StringLiteral => Ok(Box::new(StringObject {
+            value: string.rc()
+        }))
     };
     Ok(Box::new(Null))
 }
@@ -259,6 +265,14 @@ fn eval_infix(
         }
     } else if left.downcast_ref::<Null>().is_some() && right.downcast_ref::<Null>().is_some() {
         Ok(Box::new(TRUE))
+    } else if let (Some(left), Some(right), "+") = (
+        left.downcast_ref::<StringObject>(),
+        right.downcast_ref::<StringObject>(),
+        operator.as_ref(),
+    ) {
+        Ok(Box::new(StringObject {
+            value: Rc::from(format!("{}{}", left.value, right.value)),
+        }))
     } else if operator.as_ref() == "==" {
         Ok(Box::new(FALSE))
     } else if operator.as_ref() == "!=" {

@@ -105,3 +105,20 @@ impl Object for Function {
         true
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct String {
+    pub value: Rc<str>,
+}
+
+impl Display for String {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\"", self.value)
+    }
+}
+
+impl Object for String {
+    fn truthy(&self) -> bool {
+        true
+    }
+}

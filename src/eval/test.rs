@@ -3,7 +3,7 @@
 use super::eval;
 use crate::{
     ast::Integer as Int,
-    object::{Boolean, Function, Integer, Null, Scope, traits::Object},
+    object::{Boolean, Function, Integer, Null, Scope, String as StringObject, traits::Object},
     parser::test::new_program,
 };
 
@@ -204,4 +204,24 @@ fn call() {
         let eval = new_eval(input, n_statements);
         test_int(eval.as_ref(), expected);
     }
+}
+
+#[test]
+fn string() {
+    let input = "\"droddyrox\"";
+    let eval = new_eval(input, 1);
+    let string = eval
+        .downcast_ref::<StringObject>()
+        .expect("Could not downcast to string");
+    assert_eq!(string.value.as_ref(), "droddyrox");
+}
+
+#[test]
+fn concat_string() {
+    let input = "\"droddy\" + \"rox\"";
+    let eval = new_eval(input, 1);
+    let string = eval
+        .downcast_ref::<StringObject>()
+        .expect("Could not downcast to string");
+    assert_eq!(string.value.as_ref(), "droddyrox");
 }

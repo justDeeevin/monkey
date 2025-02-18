@@ -41,6 +41,7 @@ impl Iterator for Lexer {
         }
         let ch = self.ch?;
 
+        // past-tense read
         let (out, read) = if ch.is_ascii_digit() {
             let position = self.position;
             while self.ch.unwrap_or('\0').is_ascii_digit() {
@@ -59,6 +60,25 @@ impl Iterator for Lexer {
                 self.read_char();
             }
             (Token::word(&self.input[position..self.position]), true)
+        } else if ch == '"' {
+            let position = self.position + 1;
+            loop {
+                self.read_char();
+                let Some(ch) = self.ch else {
+                    break;
+                };
+                // TODO: escape sequences
+                if ch == '"' {
+                    break;
+                }
+            }
+            (
+                Token {
+                    kind: TokenKind::String,
+                    literal: self.input[position..self.position].into(),
+                },
+                false,
+            )
         } else {
             let tok = Token::special(ch, self.peek().unwrap_or('\0'));
             if tok.kind.is_double() {

@@ -49,6 +49,7 @@ pub enum TokenKind {
     Int,
     True,
     False,
+    String,
 
     Assign,
     Plus,
@@ -160,7 +161,8 @@ impl Display for TokenKind {
             Self::Return => "return",
 
             Self::True | Self::False => "boolean literal",
-            Self::Int => "integer",
+            Self::Int => "integer literal",
+            Self::String => "string literal",
 
             Self::Ident => "identifier",
 

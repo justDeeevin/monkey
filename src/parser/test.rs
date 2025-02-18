@@ -6,7 +6,7 @@ use crate::{
     ast::{
         BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral, Identifier,
         IfExpression, InfixExpression, Integer, IntegerLiteral, LetStatement, PrefixExpression,
-        Program, ReturnStatement,
+        Program, ReturnStatement, StringLiteral,
         traits::{Expression, Node},
     },
     token::Token,
@@ -421,4 +421,18 @@ fn call_expr() {
         "+",
         &(5 as Integer),
     );
+}
+
+#[test]
+fn string_literal() {
+    let input = "\"foobar\"";
+    let program = new_program(input, 1);
+    let string = program.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<StringLiteral>()
+        .expect("Could not downcast to string literal");
+
+    assert_eq!(string.value(), "foobar");
 }

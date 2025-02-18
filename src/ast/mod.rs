@@ -417,3 +417,58 @@ impl Node for CallExpression {
     }
 }
 impl Expression for CallExpression {}
+
+#[derive(Debug, Clone)]
+pub struct StringLiteral {
+    token: Token,
+    value: Rc<str>,
+}
+
+impl StringLiteral {
+    pub fn new(value: Rc<str>) -> Self {
+        Self {
+            token: Token::word(value.as_ref()),
+            value,
+        }
+    }
+
+    pub fn value(&self) -> &str {
+        &self.value
+    }
+
+    pub fn rc(&self) -> Rc<str> {
+        self.value.clone()
+    }
+}
+
+impl TryFrom<Token> for StringLiteral {
+    type Error = ParseError;
+
+    fn try_from(token: Token) -> Result<Self, Self::Error> {
+        if token.kind != TokenKind::String {
+            return Err(ParseError::Unexpected {
+                given: token,
+                expected: TokenKind::String,
+            });
+        }
+
+        Ok(Self {
+            value: token.literal.clone(),
+            token,
+        })
+    }
+}
+
+impl Display for StringLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "\"{}\"", self.value)
+    }
+}
+
+impl Node for StringLiteral {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+
+impl Expression for StringLiteral {}

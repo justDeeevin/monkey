@@ -6,7 +6,7 @@ use crate::{
     ast::{
         BlockStatement, BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral,
         Identifier, IfExpression, InfixExpression, IntegerLiteral, IntegerLiteralConstructionError,
-        LetStatement, PrefixExpression, Program, ReturnStatement,
+        LetStatement, PrefixExpression, Program, ReturnStatement, StringLiteral,
         traits::{Expression, Statement},
     },
     lexer::Lexer,
@@ -205,6 +205,7 @@ impl Parser {
                     body,
                 }))
             }
+            String => Some(Box::new(StringLiteral::try_from(current)?)),
             _ => None,
         })
     }
