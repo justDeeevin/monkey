@@ -49,55 +49,60 @@ impl std::fmt::Display for EvalErrorList {
     }
 }
 
+macro_rules! match_type {
+    ($object:expr; $($name:ident as $type:ty => $do:expr),+) => {
+        $(
+            if let Some($name) = $object.downcast_ref::<$type>() {
+                return $do;
+            }
+        )*
+    }
+}
+
 pub fn eval(root: &dyn Node, scope: &mut Scope) -> Result<Box<dyn Object>> {
-    if let Some(program) = root.downcast_ref::<Program>() {
-        eval_program(&program.statements, scope)
-    } else if let Some(expr) = root.downcast_ref::<ExpressionStatement>() {
-        eval(expr.expression.as_ref(), scope)
-    } else if let Some(int) = root.downcast_ref::<IntegerLiteral>() {
-        Ok(Box::new(Integer { value: int.value() }))
-    } else if let Some(bool) = root.downcast_ref::<BooleanLiteral>() {
-        Ok(Box::new(Boolean {
-            value: bool.value(),
-        }))
-    } else if let Some(prefix) = root.downcast_ref::<PrefixExpression>() {
-        let right = eval(prefix.right.as_ref(), scope)?;
-        eval_prefix(prefix.operator, right)
-    } else if let Some(infix) = root.downcast_ref::<InfixExpression>() {
-        let left = eval(infix.left.as_ref(), scope)?;
-        let right = eval(infix.right.as_ref(), scope)?;
-        eval_infix(&infix.operator, left, right)
-    } else if let Some(block) = root.downcast_ref::<BlockStatement>() {
-        eval_block(&block.statements, scope)
-    } else if let Some(if_expr) = root.downcast_ref::<IfExpression>() {
-        eval_if(if_expr, scope)
-    } else if let Some(return_statement) = root.downcast_ref::<ReturnStatement>() {
-        Ok(Box::new(ReturnValue {
+    match_type! {
+        root;
+
+        program as Program => eval_program(&program.statements, scope),
+        expr as ExpressionStatement => eval(expr.expression.as_ref(), scope),
+        int as IntegerLiteral  => Ok(Box::new(Integer { value: int.value() })),
+        bool as BooleanLiteral => Ok(Box::new(Boolean { value: bool.value() })),
+        prefix as PrefixExpression  => {
+            let right = eval(prefix.right.as_ref(), scope)?;
+            eval_prefix(prefix.operator, right)
+        },
+        infix as InfixExpression => {
+            let left = eval(infix.left.as_ref(), scope)?;
+            let right = eval(infix.right.as_ref(), scope)?;
+            eval_infix(&infix.operator, left, right)
+        },
+        block as BlockStatement => eval_block(&block.statements, scope),
+        if_expr as IfExpression => eval_if(if_expr, scope),
+        return_statement as ReturnStatement => Ok(Box::new(ReturnValue {
             value: eval(return_statement.value.as_ref(), scope)?,
-        }))
-    } else if let Some(let_statement) = root.downcast_ref::<LetStatement>() {
-        let mut value = eval(let_statement.value.as_ref(), scope)?;
-        if let Some(function) = value.downcast_mut::<Function>() {
-            function.name = Some(let_statement.name.clone());
-        }
-        scope.insert(let_statement.name.value().into(), value);
-        Ok(Box::new(Null))
-    } else if let Some(identifier) = root.downcast_ref::<Identifier>() {
-        eval_ident(identifier, scope)
-    } else if let Some(function) = root.downcast_ref::<FunctionLiteral>() {
-        Ok(Box::new(Function {
+        })),
+        let_statement as LetStatement => {
+            let mut value = eval(let_statement.value.as_ref(), scope)?;
+            if let Some(function) = value.downcast_mut::<Function>() {
+                function.name = Some(let_statement.name.clone());
+            }
+            scope.insert(let_statement.name.value().into(), value);
+            Ok(Box::new(Null))
+        },
+        ident as Identifier => eval_ident(ident, scope),
+        function as FunctionLiteral => Ok(Box::new(Function {
             name: None,
             parameters: function.parameters.clone(),
             body: function.body.clone(),
             scope: scope.clone(),
-        }))
-    } else if let Some(call) = root.downcast_ref::<CallExpression>() {
-        let function = eval(call.function.as_ref(), scope)?;
-        let args = eval_expressions(&call.arguments, scope)?;
-        call_function(function, &args)
-    } else {
-        todo!()
-    }
+        })),
+        call as CallExpression => {
+            let function = eval(call.function.as_ref(), scope)?;
+            let args = eval_expressions(&call.arguments, scope)?;
+            call_function(function, &args)
+        }
+    };
+    Ok(Box::new(Null))
 }
 
 fn call_function(function: Box<dyn Object>, args: &[Box<dyn Object>]) -> Result<Box<dyn Object>> {
