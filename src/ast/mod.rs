@@ -168,11 +168,6 @@ impl IntegerLiteral {
     pub fn value(&self) -> Integer {
         self.value
     }
-
-    pub fn from_token(token: Token) -> Result<Self, std::num::ParseIntError> {
-        let value = token.literal.parse()?;
-        Ok(Self { token, value })
-    }
 }
 
 #[derive(Debug, thiserror::Error)]
