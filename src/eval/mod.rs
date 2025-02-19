@@ -33,6 +33,12 @@ pub fn intrinsics() -> Scope {
             function: intrinsics::len,
         }),
     );
+    scope.insert(
+        "puts".into(),
+        Box::new(Intrinsic {
+            function: intrinsics::puts,
+        }),
+    );
 
     scope
 }
