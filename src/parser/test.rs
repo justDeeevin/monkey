@@ -1,12 +1,12 @@
 #![cfg(test)]
 
-use std::any::Any;
+use std::{any::Any, collections::HashMap};
 
 use crate::{
     ast::{
         ArrayLiteral, BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral,
-        Identifier, IfExpression, IndexExpression, InfixExpression, Integer, IntegerLiteral,
-        LetStatement, PrefixExpression, Program, ReturnStatement, StringLiteral,
+        HashLiteral, Identifier, IfExpression, IndexExpression, InfixExpression, Integer,
+        IntegerLiteral, LetStatement, PrefixExpression, Program, ReturnStatement, StringLiteral,
         traits::{Expression, Node},
     },
     token::Token,
@@ -391,7 +391,7 @@ pub fn new_program(input: &str, expected_statements: usize) -> Program {
     let program = match input.parse::<Program>() {
         Ok(program) => program,
         Err(e) => {
-            panic!("Failed to parse program: {e}");
+            panic!("Failed to parse program!\n{e}");
         }
     };
 
@@ -487,4 +487,78 @@ fn index_expr() {
 
     test_identifier(index.left.as_ref(), "myArray");
     test_infix(index.index.as_ref(), &(1 as Integer), "+", &(1 as Integer));
+}
+
+#[test]
+fn hash_literal() {
+    let input = "{\"one\": 1, \"two\": 2, \"three\": 3}";
+    let program = new_program(input, 1);
+    let hash = program.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<HashLiteral>()
+        .expect("Could not downcast to hash literal");
+
+    assert_eq!(hash.pairs.len(), 3);
+    let expected = HashMap::from([("one", 1), ("two", 2), ("three", 3)]);
+    for (k, v) in &hash.pairs {
+        let literal = k
+            .downcast_ref::<StringLiteral>()
+            .expect("Could not downcast to string literal");
+        let expected = expected
+            .get(literal.value())
+            .expect("No value for expected key");
+        test_int_literal(v.as_ref(), *expected);
+    }
+}
+
+#[test]
+fn empty_hash() {
+    let input = "{}";
+    let program = new_program(input, 1);
+    let hash = program.statements[0]
+        .as_ref()
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<HashLiteral>()
+        .expect("Could not downcast to hash literal");
+
+    assert_eq!(hash.pairs.len(), 0);
+}
+
+#[test]
+fn hash_with_expr() {
+    let input = "{\"one\": 0 + 1, \"two\": 10 - 8, \"three\": 15 / 5}";
+    let program = new_program(input, 1);
+    let hash = program.statements[0]
+        .as_ref()
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<HashLiteral>()
+        .expect("Could not downcast to hash literal");
+
+    assert_eq!(hash.pairs.len(), 3);
+    let expected = HashMap::from([
+        ("one", (0, "+", 1)),
+        ("two", (10, "-", 8)),
+        ("three", (15, "/", 5)),
+    ]);
+
+    for (k, v) in &hash.pairs {
+        let string = k
+            .downcast_ref::<StringLiteral>()
+            .expect("Could not downcast to string literal");
+        let expected = expected
+            .get(string.value())
+            .expect("No value for expected key");
+        test_infix(
+            v.as_ref(),
+            &(expected.0 as Integer),
+            expected.1,
+            &(expected.2 as Integer),
+        );
+    }
 }

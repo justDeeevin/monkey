@@ -224,3 +224,32 @@ impl Object for Array {
         "array"
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct Hash {
+    pub pairs: HashMap<Box<dyn Object>, Box<dyn Object>>,
+}
+
+impl Display for Hash {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{")?;
+        if self.pairs.is_empty() {
+            return write!(f, "}}");
+        }
+        for (k, v) in self.pairs.iter().take(self.pairs.len() - 1) {
+            write!(f, "{k}: {v}, ")?;
+        }
+        if let Some((k, v)) = self.pairs.iter().last() {
+            write!(f, "{k}: {v}")?;
+        }
+        write!(f, "}}")
+    }
+}
+impl Object for Hash {
+    fn truthy(&self) -> bool {
+        true
+    }
+    fn type_name(&self) -> &'static str {
+        "hash"
+    }
+}

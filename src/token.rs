@@ -65,6 +65,7 @@ pub enum TokenKind {
 
     Comma,
     Semi,
+    Colon,
 
     LParen,
     RParen,
@@ -105,6 +106,7 @@ impl TokenKind {
             '>' => Self::Greater,
             '[' => Self::LBracket,
             ']' => Self::RBracket,
+            ':' => Self::Colon,
             _ => Self::Illegal,
         }
     }
@@ -189,9 +191,10 @@ impl Display for TokenKind {
             Self::RBracket => "closing bracket",
 
             Self::Comma => "comma",
+            Self::Semi => "semicolon",
+            Self::Colon => "colon",
 
             Self::Illegal => "illegal",
-            Self::Semi => "semicolon",
         };
         write!(f, "{name}")
     }

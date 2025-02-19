@@ -4,17 +4,18 @@ mod test;
 use crate::{
     ast::{
         ArrayLiteral, BlockStatement, BooleanLiteral, CallExpression, ExpressionStatement,
-        FunctionLiteral, Identifier, IfExpression, IndexExpression, InfixExpression,
+        FunctionLiteral, HashLiteral, Identifier, IfExpression, IndexExpression, InfixExpression,
         Integer as Int, IntegerLiteral, LetStatement, PrefixExpression, Program, ReturnStatement,
         StringLiteral,
         traits::{Expression, Node, Statement},
     },
     object::{
-        Array, Boolean, Function, Integer, Intrinsic, Null, ReturnValue, Scope,
+        Array, Boolean, Function, Hash, Integer, Intrinsic, Null, ReturnValue, Scope,
         String as StringObject, traits::Object,
     },
 };
 use std::{
+    collections::HashMap,
     ops::{Deref, DerefMut},
     rc::Rc,
 };
@@ -55,8 +56,8 @@ pub enum EvalError {
     NotFound(Rc<str>),
     #[error("Cannot call {0}")]
     CannotCall(Rc<str>),
-    #[error("Cannot index {list} with {index}")]
-    CannotIndex { list: Rc<str>, index: Rc<str> },
+    #[error("Cannot index into a {0}")]
+    CannotIndex(Rc<str>),
     #[error("Expected type {expected}, got {got}")]
     BadType { expected: String, got: String },
     #[error("Expected {expected} arguments, got {got}")]
@@ -159,9 +160,21 @@ pub fn eval(root: &dyn Node, scope: &mut Scope) -> Result<Box<dyn Object>> {
                 Ok(Box::new(Array { elements }))
             }
         },
-        index as IndexExpression => eval_index(eval(index.left.as_ref(), scope)?, eval(index.index.as_ref(), scope)?)
+        index as IndexExpression => eval_index(eval(index.left.as_ref(), scope)?, eval(index.index.as_ref(), scope)?),
+        hash as HashLiteral => eval_hash_literal(hash, scope)
     };
     Ok(Box::new(Null))
+}
+
+fn eval_hash_literal(hash: &HashLiteral, scope: &mut Scope) -> Result<Box<dyn Object>> {
+    let mut pairs = HashMap::new();
+    for (k, v) in &hash.pairs {
+        let k = eval(k.as_ref(), scope)?;
+        let v = eval(v.as_ref(), scope)?;
+        pairs.insert(k, v);
+    }
+
+    Ok(Box::new(Hash { pairs }))
 }
 
 fn eval_index(left: Box<dyn Object>, index: Box<dyn Object>) -> Result<Box<dyn Object>> {
@@ -170,11 +183,14 @@ fn eval_index(left: Box<dyn Object>, index: Box<dyn Object>) -> Result<Box<dyn O
         index.downcast_ref::<Integer>(),
     ) {
         eval_array_index(array, index)
+    } else if let Some(hash) = left.downcast_ref::<Hash>() {
+        Ok(hash
+            .pairs
+            .get(&index)
+            .cloned()
+            .unwrap_or_else(|| Box::new(Null)))
     } else {
-        Err(EvalError::CannotIndex {
-            list: left.type_name().into(),
-            index: index.type_name().into(),
-        })
+        Err(EvalError::CannotIndex(left.type_name().into()))
     }
 }
 

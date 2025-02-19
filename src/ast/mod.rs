@@ -7,7 +7,7 @@ use crate::{
     token::{Token, TokenKind},
 };
 
-use std::{fmt::Display, rc::Rc};
+use std::{collections::HashMap, fmt::Display, rc::Rc};
 
 // This seems good for now.
 pub type Integer = i64;
@@ -523,3 +523,30 @@ impl Node for IndexExpression {
     }
 }
 impl Expression for IndexExpression {}
+
+#[derive(Debug, Clone)]
+pub struct HashLiteral {
+    pub token: Token,
+    pub pairs: HashMap<Box<dyn Expression>, Box<dyn Expression>>,
+}
+
+impl Display for HashLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{{ ")?;
+        for (k, v) in self.pairs.iter().take(self.pairs.len() - 1) {
+            write!(f, "{}: {}, ", k, v)?;
+        }
+        if let Some((k, v)) = self.pairs.iter().last() {
+            write!(f, "{}: {} ", k, v)?;
+        }
+        write!(f, "}}")
+    }
+}
+
+impl Node for HashLiteral {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+
+impl Expression for HashLiteral {}

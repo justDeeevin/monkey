@@ -1,11 +1,11 @@
 pub mod test;
 
-use std::str::FromStr;
+use std::{collections::HashMap, str::FromStr};
 
 use crate::{
     ast::{
         ArrayLiteral, BlockStatement, BooleanLiteral, CallExpression, ExpressionStatement,
-        FunctionLiteral, Identifier, IfExpression, IndexExpression, InfixExpression,
+        FunctionLiteral, HashLiteral, Identifier, IfExpression, IndexExpression, InfixExpression,
         IntegerLiteral, IntegerLiteralConstructionError, LetStatement, PrefixExpression, Program,
         ReturnStatement, StringLiteral,
         traits::{Expression, Statement},
@@ -213,6 +213,26 @@ impl Parser {
                 Some(Box::new(ArrayLiteral {
                     token: current,
                     elements,
+                }))
+            }
+            LBrace => {
+                let current = self.current_clone()?;
+                let mut pairs = HashMap::new();
+                while self.peek_ref()?.kind != RBrace {
+                    self.next_token();
+                    let key = self.parse_expression(ExpressionKind::Lowest)?;
+                    self.expect_peek(Colon)?;
+                    self.next_token();
+                    let value = self.parse_expression(ExpressionKind::Lowest)?;
+                    pairs.insert(key, value);
+                    if self.peek_ref()?.kind != RBrace {
+                        self.expect_peek(Comma)?;
+                    }
+                }
+                self.expect_peek(RBrace)?;
+                Some(Box::new(HashLiteral {
+                    token: current,
+                    pairs,
                 }))
             }
             _ => None,

@@ -1,10 +1,14 @@
 #![cfg(test)]
 
+use std::collections::HashMap;
+
 use super::{EvalError, eval};
 use crate::{
     ast::Integer as Int,
+    eval::{FALSE, TRUE},
     object::{
-        Array, Boolean, Function, Integer, Null, Scope, String as StringObject, traits::Object,
+        Array, Boolean, Function, Hash, Integer, Null, Scope, String as StringObject,
+        traits::Object,
     },
     parser::test::new_program,
 };
@@ -320,6 +324,78 @@ fn index() {
             test_int(eval.as_ref(), expected);
         } else {
             test_null(eval.as_ref());
+        }
+    }
+}
+
+#[test]
+fn hash() {
+    let input = r#"
+        let two = "two";
+        {
+            "one": 10 - 9,
+            two: 1 + 1,
+            "thr" + "ee": 6 / 2,
+            4: 4,
+            true: 5,
+            false: 6,
+        }
+    "#;
+    let expected: HashMap<Box<dyn Object>, Int> =
+        HashMap::from_iter::<[(Box<dyn Object>, Int); 6]>([
+            (
+                Box::new(StringObject {
+                    value: "one".into(),
+                }),
+                1,
+            ),
+            (
+                Box::new(StringObject {
+                    value: "two".into(),
+                }),
+                2,
+            ),
+            (
+                Box::new(StringObject {
+                    value: "three".into(),
+                }),
+                3,
+            ),
+            (Box::new(Integer { value: 4 }), 4),
+            (Box::new(TRUE), 5),
+            (Box::new(FALSE), 6),
+        ]);
+    let eval = new_eval(input, 2);
+    let hash = eval
+        .downcast_ref::<Hash>()
+        .expect("Could not downcast to hash");
+    assert_eq!(hash.pairs.len(), expected.len());
+    for (expected_k, expected_v) in expected {
+        let v = hash.pairs.get(&expected_k).expect("No value found for key");
+        test_int(v.as_ref(), expected_v);
+    }
+}
+
+#[test]
+fn index_hash() {
+    let tests = [
+        (1, "{\"foo\": 5}[\"foo\"]", Some(5)),
+        (1, "{\"foo\": 5}[\"bar\"]", None),
+        (2, "let key = \"foo\"; {\"foo\": 5}[key]", Some(5)),
+        (1, "{}[\"foo\"]", None),
+        (1, "{5: 5}[5]", Some(5)),
+        (1, "{true: 5}[true]", Some(5)),
+        (1, "{false: 5}[false]", Some(5)),
+    ];
+    for (n_statements, input, expected) in tests {
+        let eval = new_eval(input, n_statements);
+        match expected {
+            Some(expected) => {
+                test_int(eval.as_ref(), expected);
+            }
+            None => {
+                test_null(eval.as_ref());
+            }
         }
     }
 }

@@ -28,6 +28,7 @@ fn lex() {
         "foobar"
         "foo bar"
         [1,2];
+        {"foo": "bar"}
     "#;
 
     let tests = [
@@ -111,6 +112,12 @@ fn lex() {
         (Comma, ","),
         (Int, "2"),
         (RBracket, "]"),
+        (Semi, ";"),
+        (LBrace, "{"),
+        (String, "foo"),
+        (Colon, ":"),
+        (String, "bar"),
+        (RBrace, "}"),
     ];
 
     let lexer = Lexer::new(input);
