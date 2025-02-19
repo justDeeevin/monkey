@@ -70,6 +70,8 @@ pub enum TokenKind {
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
 
     Fn,
     Let,
@@ -101,6 +103,8 @@ impl TokenKind {
             '/' => Self::Div,
             '<' => Self::Less,
             '>' => Self::Greater,
+            '[' => Self::LBracket,
+            ']' => Self::RBracket,
             _ => Self::Illegal,
         }
     }
@@ -181,6 +185,8 @@ impl Display for TokenKind {
             Self::RParen => "closing parenthesis",
             Self::LBrace => "open brace",
             Self::RBrace => "closing brace",
+            Self::LBracket => "open bracket",
+            Self::RBracket => "closing bracket",
 
             Self::Comma => "comma",
 

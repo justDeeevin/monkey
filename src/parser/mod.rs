@@ -4,9 +4,10 @@ use std::str::FromStr;
 
 use crate::{
     ast::{
-        BlockStatement, BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral,
-        Identifier, IfExpression, InfixExpression, IntegerLiteral, IntegerLiteralConstructionError,
-        LetStatement, PrefixExpression, Program, ReturnStatement, StringLiteral,
+        ArrayLiteral, BlockStatement, BooleanLiteral, CallExpression, ExpressionStatement,
+        FunctionLiteral, Identifier, IfExpression, IndexExpression, InfixExpression,
+        IntegerLiteral, IntegerLiteralConstructionError, LetStatement, PrefixExpression, Program,
+        ReturnStatement, StringLiteral,
         traits::{Expression, Statement},
     },
     lexer::Lexer,
@@ -206,6 +207,14 @@ impl Parser {
                 }))
             }
             String => Some(Box::new(StringLiteral::try_from(current)?)),
+            LBracket => {
+                let current = self.current_clone()?;
+                let elements = self.parse_expression_list(RBracket)?;
+                Some(Box::new(ArrayLiteral {
+                    token: current,
+                    elements,
+                }))
+            }
             _ => None,
         })
     }
@@ -253,7 +262,17 @@ impl Parser {
             return Ok(Box::new(CallExpression {
                 token: current,
                 function: left,
-                arguments: self.parse_call_arguments()?,
+                arguments: self.parse_expression_list(RParen)?,
+            }));
+        }
+        if current.kind == LBracket {
+            self.next_token();
+            let index = self.parse_expression(ExpressionKind::Lowest)?;
+            self.expect_peek(RBracket)?;
+            return Ok(Box::new(IndexExpression {
+                token: current,
+                left,
+                index,
             }));
         }
         let kind = ExpressionKind::from(current.kind);
@@ -268,10 +287,13 @@ impl Parser {
         }))
     }
 
-    fn parse_call_arguments(&mut self) -> Result<Vec<Box<dyn Expression>>, ParseError> {
+    fn parse_expression_list(
+        &mut self,
+        end: TokenKind,
+    ) -> Result<Vec<Box<dyn Expression>>, ParseError> {
         let mut out = Vec::new();
         self.next_token();
-        if self.current_ref()?.kind == RParen {
+        if self.current_ref()?.kind == end {
             return Ok(out);
         }
 
@@ -282,7 +304,7 @@ impl Parser {
             out.push(self.parse_expression(ExpressionKind::Lowest)?);
         }
 
-        self.expect_peek(RParen)?;
+        self.expect_peek(end)?;
         Ok(out)
     }
 }
@@ -350,6 +372,7 @@ enum ExpressionKind {
     Product,
     Prefix,
     Call,
+    Index,
 }
 
 impl From<TokenKind> for ExpressionKind {
@@ -360,6 +383,7 @@ impl From<TokenKind> for ExpressionKind {
             Plus | Minus => Self::Sum,
             Mult | Div => Self::Product,
             LParen => Self::Call,
+            LBracket => Self::Index,
             _ => Self::Lowest,
         }
     }

@@ -200,3 +200,27 @@ impl Object for Intrinsic {
         "function"
     }
 }
+
+#[derive(Debug, Clone)]
+pub struct Array {
+    pub elements: Vec<Box<dyn Object>>,
+}
+
+impl Display for Array {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for element in self.elements.iter().take(self.elements.len() - 1) {
+            write!(f, "{element}, ")?;
+        }
+        write!(f, "{}]", self.elements.last().unwrap())
+    }
+}
+
+impl Object for Array {
+    fn truthy(&self) -> bool {
+        true
+    }
+    fn type_name(&self) -> &'static str {
+        "array"
+    }
+}

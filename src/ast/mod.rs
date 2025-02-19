@@ -472,3 +472,54 @@ impl Node for StringLiteral {
 }
 
 impl Expression for StringLiteral {}
+
+#[derive(Debug, Clone)]
+pub struct ArrayLiteral {
+    pub token: Token,
+    pub elements: Vec<Box<dyn Expression>>,
+}
+
+impl Display for ArrayLiteral {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        for element in self.elements.iter().take(self.elements.len() - 1) {
+            write!(f, "{element}, ")?;
+        }
+        write!(
+            f,
+            "{}]",
+            self.elements
+                .last()
+                .map(|e| e.to_string())
+                .unwrap_or_default()
+        )
+    }
+}
+
+impl Node for ArrayLiteral {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+
+impl Expression for ArrayLiteral {}
+
+#[derive(Debug, Clone)]
+pub struct IndexExpression {
+    pub token: Token,
+    pub left: Box<dyn Expression>,
+    pub index: Box<dyn Expression>,
+}
+
+impl Display for IndexExpression {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}[{}]", self.left, self.index)
+    }
+}
+
+impl Node for IndexExpression {
+    fn token_literal(&self) -> &str {
+        &self.token.literal
+    }
+}
+impl Expression for IndexExpression {}

@@ -3,14 +3,15 @@ mod test;
 
 use crate::{
     ast::{
-        BlockStatement, BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral,
-        Identifier, IfExpression, InfixExpression, IntegerLiteral, LetStatement, PrefixExpression,
-        Program, ReturnStatement, StringLiteral,
+        ArrayLiteral, BlockStatement, BooleanLiteral, CallExpression, ExpressionStatement,
+        FunctionLiteral, Identifier, IfExpression, IndexExpression, InfixExpression,
+        Integer as Int, IntegerLiteral, LetStatement, PrefixExpression, Program, ReturnStatement,
+        StringLiteral,
         traits::{Expression, Node, Statement},
     },
     object::{
-        Boolean, Function, Integer, Intrinsic, Null, ReturnValue, Scope, String as StringObject,
-        traits::Object,
+        Array, Boolean, Function, Integer, Intrinsic, Null, ReturnValue, Scope,
+        String as StringObject, traits::Object,
     },
 };
 use std::{
@@ -53,7 +54,9 @@ pub enum EvalError {
     #[error("Identifier {0} not found")]
     NotFound(Rc<str>),
     #[error("Cannot call {0}")]
-    CannotCall(Box<dyn Object>),
+    CannotCall(Rc<str>),
+    #[error("Cannot index {list} with {index}")]
+    CannotIndex { list: Rc<str>, index: Rc<str> },
     #[error("Expected type {expected}, got {got}")]
     BadType { expected: String, got: String },
     #[error("Expected {expected} arguments, got {got}")]
@@ -140,9 +143,47 @@ pub fn eval(root: &dyn Node, scope: &mut Scope) -> Result<Box<dyn Object>> {
         },
         string as StringLiteral => Ok(Box::new(StringObject {
             value: string.rc()
-        }))
+        })),
+        array as ArrayLiteral => {
+            let mut elements = Vec::new();
+            let mut errors = Vec::new();
+            for element in &array.elements {
+                match eval(element.as_ref(), scope) {
+                    Ok(value) => elements.push(value),
+                    Err(e) => errors.push(e),
+                }
+            }
+            if !errors.is_empty() {
+                Err(EvalError::Many(EvalErrorList(errors)))
+            } else {
+                Ok(Box::new(Array { elements }))
+            }
+        },
+        index as IndexExpression => eval_index(eval(index.left.as_ref(), scope)?, eval(index.index.as_ref(), scope)?)
     };
     Ok(Box::new(Null))
+}
+
+fn eval_index(left: Box<dyn Object>, index: Box<dyn Object>) -> Result<Box<dyn Object>> {
+    if let (Some(array), Some(index)) = (
+        left.downcast_ref::<Array>(),
+        index.downcast_ref::<Integer>(),
+    ) {
+        eval_array_index(array, index)
+    } else {
+        Err(EvalError::CannotIndex {
+            list: left.type_name().into(),
+            index: index.type_name().into(),
+        })
+    }
+}
+
+fn eval_array_index(array: &Array, index: &Integer) -> Result<Box<dyn Object>> {
+    if !(0..array.elements.len() as Int).contains(&index.value) {
+        Ok(Box::new(Null))
+    } else {
+        Ok(array.elements[index.value as usize].clone())
+    }
 }
 
 fn call_function(function: Box<dyn Object>, args: &[Box<dyn Object>]) -> Result<Box<dyn Object>> {
@@ -151,7 +192,7 @@ fn call_function(function: Box<dyn Object>, args: &[Box<dyn Object>]) -> Result<
     }
     let mut function = function
         .downcast::<Function>()
-        .map_err(EvalError::CannotCall)?;
+        .map_err(|o| EvalError::CannotCall(o.type_name().into()))?;
     function.scope.extend(
         function
             .parameters

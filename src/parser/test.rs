@@ -4,9 +4,9 @@ use std::any::Any;
 
 use crate::{
     ast::{
-        BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral, Identifier,
-        IfExpression, InfixExpression, Integer, IntegerLiteral, LetStatement, PrefixExpression,
-        Program, ReturnStatement, StringLiteral,
+        ArrayLiteral, BooleanLiteral, CallExpression, ExpressionStatement, FunctionLiteral,
+        Identifier, IfExpression, IndexExpression, InfixExpression, Integer, IntegerLiteral,
+        LetStatement, PrefixExpression, Program, ReturnStatement, StringLiteral,
         traits::{Expression, Node},
     },
     token::Token,
@@ -253,6 +253,14 @@ fn pemdas() {
             "add(a + b + c * d / f + g);",
             "add((((a + b) + ((c * d) / f)) + g));",
         ),
+        (
+            "a * [1, 2, 3, 4][b * c] * d",
+            "((a * [1, 2, 3, 4][(b * c)]) * d);",
+        ),
+        (
+            "add(a * b[2], b[1], 2 * [1, 2][1])",
+            "add((a * b[2]), b[1], (2 * [1, 2][1]));",
+        ),
     ];
 
     for (input, expected) in inputs {
@@ -435,4 +443,48 @@ fn string_literal() {
         .expect("Could not downcast to string literal");
 
     assert_eq!(string.value(), "foobar");
+}
+
+#[test]
+fn array_literal() {
+    let input = "[1, 3* 2, 3 + 3]";
+
+    let program = new_program(input, 1);
+    let array = program.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<ArrayLiteral>()
+        .expect("Could not downcast to array literal");
+
+    assert_eq!(array.elements.len(), 3);
+    test_int_literal(array.elements[0].as_ref(), 1);
+    test_infix(
+        array.elements[1].as_ref(),
+        &(3 as Integer),
+        "*",
+        &(2 as Integer),
+    );
+    test_infix(
+        array.elements[2].as_ref(),
+        &(3 as Integer),
+        "+",
+        &(3 as Integer),
+    );
+}
+
+#[test]
+fn index_expr() {
+    let input = "myArray[1 + 1]";
+
+    let program = new_program(input, 1);
+    let index = program.statements[0]
+        .downcast_ref::<ExpressionStatement>()
+        .expect("Could not downcast to expression statement")
+        .expression
+        .downcast_ref::<IndexExpression>()
+        .expect("Could not downcast to index expression");
+
+    test_identifier(index.left.as_ref(), "myArray");
+    test_infix(index.index.as_ref(), &(1 as Integer), "+", &(1 as Integer));
 }

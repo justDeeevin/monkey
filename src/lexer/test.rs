@@ -27,6 +27,7 @@ fn lex() {
         10 != 9;
         "foobar"
         "foo bar"
+        [1,2];
     "#;
 
     let tests = [
@@ -105,6 +106,11 @@ fn lex() {
         (Semi, ";"),
         (String, "foobar"),
         (String, "foo bar"),
+        (LBracket, "["),
+        (Int, "1"),
+        (Comma, ","),
+        (Int, "2"),
+        (RBracket, "]"),
     ];
 
     let lexer = Lexer::new(input);

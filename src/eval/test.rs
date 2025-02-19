@@ -3,7 +3,9 @@
 use super::{EvalError, eval};
 use crate::{
     ast::Integer as Int,
-    object::{Boolean, Function, Integer, Null, Scope, String as StringObject, traits::Object},
+    object::{
+        Array, Boolean, Function, Integer, Null, Scope, String as StringObject, traits::Object,
+    },
     parser::test::new_program,
 };
 
@@ -272,6 +274,52 @@ fn len() {
                 assert_eq!(errors.len(), 1);
                 assert_eq!(errors[0].to_string(), e);
             }
+        }
+    }
+}
+
+#[test]
+fn array() {
+    let input = "[1,2 * 2, 3 + 3]";
+    let eval = new_eval(input, 1);
+    let array = eval
+        .downcast_ref::<Array>()
+        .expect("Could not downcast to array");
+    assert_eq!(array.elements.len(), 3);
+    test_int(array.elements[0].as_ref(), 1);
+    test_int(array.elements[1].as_ref(), 4);
+    test_int(array.elements[2].as_ref(), 6);
+}
+
+#[test]
+fn index() {
+    let tests = [
+        (1, "[1, 2, 3][0]", Some(1)),
+        (1, "[1, 2, 3][1]", Some(2)),
+        (1, "[1, 2, 3][2]", Some(3)),
+        (2, "let i = 0; [1][i];", Some(1)),
+        (1, "[1, 2, 3][1 + 1];", Some(3)),
+        (2, "let myArray = [1, 2, 3]; myArray[2];", Some(3)),
+        (
+            2,
+            "let myArray = [1, 2, 3]; myArray[0] + myArray[1] + myArray[2];",
+            Some(6),
+        ),
+        (
+            3,
+            "let myArray = [1, 2, 3]; let i = myArray[0]; myArray[i]",
+            Some(2),
+        ),
+        (1, "[1, 2, 3][3]", None),
+        (1, "[1, 2, 3][-1]", None),
+    ];
+
+    for (n_statements, input, expected) in tests {
+        let eval = new_eval(input, n_statements);
+        if let Some(expected) = expected {
+            test_int(eval.as_ref(), expected);
+        } else {
+            test_null(eval.as_ref());
         }
     }
 }
