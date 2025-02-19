@@ -27,7 +27,9 @@ fn main() {
                 return;
             }
         };
-        println!("{}", eval);
+        if eval.downcast_ref::<object::Null>().is_none() {
+            println!("{}", eval);
+        }
         return;
     }
 
