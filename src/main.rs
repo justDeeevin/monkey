@@ -1,3 +1,4 @@
+use crate::lexer::Lexer;
 use rustyline::error::ReadlineError;
 
 mod lexer;
@@ -11,7 +12,9 @@ fn main() {
         match rl.readline(">> ") {
             Ok(line) => {
                 let _ = rl.add_history_entry(&line);
-                println!("{line}")
+                for token in Lexer::new(&line) {
+                    println!("{token:?}");
+                }
             }
             Err(ReadlineError::Interrupted) => {}
             Err(ReadlineError::Eof) => {
