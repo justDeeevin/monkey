@@ -1,5 +1,8 @@
 use rustyline::error::ReadlineError;
 
+mod lexer;
+mod token;
+
 fn main() {
     println!("Monkey REPL");
     println!("Ctrl-D to exit");
