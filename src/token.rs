@@ -7,32 +7,47 @@ pub struct Token<'a> {
     pub span: Span,
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, strum::Display)]
 pub enum TokenKind {
+    #[strum(serialize = "Illegal token")]
     Illegal,
+    #[strum(serialize = "Identifier")]
     Ident,
+    #[strum(serialize = "Integer literal")]
     Int,
 
+    #[strum(serialize = "Assignment")]
     Assign,
     Plus,
     Minus,
     Not,
+    #[strum(serialize = "Multiply")]
     Mul,
+    #[strum(serialize = "Divide")]
     Div,
 
+    #[strum(serialize = "Less than")]
     LT,
+    #[strum(serialize = "Greater than")]
     GT,
+    #[strum(serialize = "Equal")]
     Eq,
+    #[strum(serialize = "Not equal")]
     Neq,
 
     Comma,
     Semicolon,
 
+    #[strum(serialize = "Left parenthesis")]
     LParen,
+    #[strum(serialize = "Right parenthesis")]
     RParen,
+    #[strum(serialize = "Left brace")]
     LBrace,
+    #[strum(serialize = "Right brace")]
     RBrace,
 
+    #[strum(serialize = "Function")]
     Fn,
     Let,
     True,
@@ -42,10 +57,15 @@ pub enum TokenKind {
     Return,
 }
 
-#[derive(Debug)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
+}
+
+impl std::fmt::Debug for Span {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}..{}", self.start, self.end)
+    }
 }
 
 pub fn lookup_keyword(input: &str) -> Option<TokenKind> {
