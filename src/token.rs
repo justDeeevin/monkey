@@ -1,5 +1,3 @@
-use std::{collections::HashMap, sync::LazyLock};
-
 #[derive(Debug)]
 pub struct Token<'a> {
     pub kind: TokenKind,
@@ -57,9 +55,26 @@ pub enum TokenKind {
     Return,
 }
 
+#[derive(Clone, Copy)]
 pub struct Span {
     pub start: usize,
     pub end: usize,
+}
+
+impl ariadne::Span for Span {
+    type SourceId = &'static str;
+
+    fn source(&self) -> &Self::SourceId {
+        &"input"
+    }
+
+    fn start(&self) -> usize {
+        self.start
+    }
+
+    fn end(&self) -> usize {
+        self.end
+    }
 }
 
 impl std::fmt::Debug for Span {

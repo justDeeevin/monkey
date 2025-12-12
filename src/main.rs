@@ -1,7 +1,9 @@
 use crate::lexer::Lexer;
 use rustyline::error::ReadlineError;
 
+mod ast;
 mod lexer;
+mod parser;
 mod token;
 
 fn main() {

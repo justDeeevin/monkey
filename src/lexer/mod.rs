@@ -4,7 +4,7 @@ use crate::token::{Span, Token, TokenKind, lookup_keyword};
 mod test;
 
 pub struct Lexer<'a> {
-    input: &'a str,
+    pub input: &'a str,
     pos: usize,
     next_pos: usize,
     char: Option<char>,
