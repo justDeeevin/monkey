@@ -1,4 +1,4 @@
-use crate::token::{KEYWORDS, Span, Token, TokenKind};
+use crate::token::{Span, Token, TokenKind, lookup_keyword};
 
 #[cfg(test)]
 mod test;
@@ -82,10 +82,7 @@ impl<'a> Iterator for Lexer<'a> {
                 {
                     self.read_char();
                 }
-                KEYWORDS
-                    .get(dbg!(&self.input[start..self.next_pos]))
-                    .copied()
-                    .unwrap_or(TokenKind::Ident)
+                lookup_keyword(&self.input[start..self.next_pos]).unwrap_or(TokenKind::Ident)
             }
             c if c.is_ascii_digit() => {
                 while self.peek_char().as_ref().is_some_and(char::is_ascii_digit) {

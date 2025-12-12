@@ -48,14 +48,15 @@ pub struct Span {
     pub end: usize,
 }
 
-pub static KEYWORDS: LazyLock<HashMap<&'static str, TokenKind>> = LazyLock::new(|| {
-    HashMap::from([
-        ("fn", TokenKind::Fn),
-        ("let", TokenKind::Let),
-        ("true", TokenKind::True),
-        ("false", TokenKind::False),
-        ("if", TokenKind::If),
-        ("else", TokenKind::Else),
-        ("return", TokenKind::Return),
-    ])
-});
+pub fn lookup_keyword(input: &str) -> Option<TokenKind> {
+    match input {
+        "fn" => Some(TokenKind::Fn),
+        "let" => Some(TokenKind::Let),
+        "true" => Some(TokenKind::True),
+        "false" => Some(TokenKind::False),
+        "if" => Some(TokenKind::If),
+        "else" => Some(TokenKind::Else),
+        "return" => Some(TokenKind::Return),
+        _ => None,
+    }
+}
