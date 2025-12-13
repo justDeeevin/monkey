@@ -1,7 +1,7 @@
 use crate::{lexer::Lexer, token::TokenKind};
 
 #[test]
-fn test_next() {
+fn next() {
     let input = r#"let five = 5;
 let ten = 10;
 

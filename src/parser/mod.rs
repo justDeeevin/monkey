@@ -35,11 +35,17 @@ pub enum ErrorKind {
         expected: String,
         found: Option<TokenKind>,
     },
+    #[error("Failed to parse integer literal.")]
+    ParseInt(
+        #[from]
+        #[source]
+        std::num::ParseIntError,
+    ),
 }
 
 pub type Result<'a, T, E = Error<'a>> = std::result::Result<T, E>;
 
-struct Parser<'a> {
+pub struct Parser<'a> {
     lexer: Lexer<'a>,
 
     current: Option<Token<'a>>,
@@ -125,11 +131,128 @@ impl<'a> Parser<'a> {
             return Err(error(None));
         };
 
-        Ok(match token.kind {
+        let out = match token.kind {
             TokenKind::Let => Statement::Let(self.parse_let_statement(token)?),
             TokenKind::Return => Statement::Return(self.parse_return_statement(token)?),
-            _ => todo!(),
-        })
+            _ => Statement::Expression(self.parse_expression_statement(token)?),
+        };
+
+        if self.peek_is(TokenKind::Semicolon) {
+            self.next_token();
+        }
+
+        Ok(out)
+    }
+
+    fn parse_expression_statement(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+        let expr = self.parse_expression(Some(token), ExpressionKind::Base)?;
+
+        Ok(expr)
+    }
+
+    fn peek_is(&self, kind: TokenKind) -> bool {
+        self.peek.as_ref().map(|t| t.kind) == Some(kind)
+    }
+
+    fn parse_expression(
+        &mut self,
+        token: Option<Token<'a>>,
+        kind: ExpressionKind,
+    ) -> Result<'a, Expression<'a>> {
+        let Some(token) = token.or_else(|| self.next_token().take()) else {
+            return Err(self.unexpected_eof());
+        };
+
+        let Some(prefix_parser) = token.kind.prefix_parse() else {
+            return Err(Error {
+                input: self.lexer.input,
+                span: token.span,
+                kind: ErrorKind::Unexpected {
+                    expected: "expression".to_string(),
+                    found: Some(token.kind),
+                },
+            });
+        };
+
+        let mut left = prefix_parser(self, token)?;
+
+        while self
+            .peek
+            .as_ref()
+            .is_some_and(|t| t.kind != TokenKind::Semicolon)
+            && kind < self.peek_expr_kind()?
+        {
+            let Some(peek) = self.peek.take() else {
+                return Ok(left);
+            };
+            if !peek.kind.is_infix() && peek.kind != TokenKind::LParen {
+                return Ok(left);
+            };
+
+            self.next_token();
+
+            if peek.kind == TokenKind::LParen {
+                left = self.parse_call(peek, left)?;
+            } else {
+                left = self.parse_infix(peek, left)?;
+            }
+        }
+
+        Ok(left)
+    }
+
+    fn parse_call(
+        &mut self,
+        token: Token<'a>,
+        function: Expression<'a>,
+    ) -> Result<'a, Expression<'a>> {
+        let arguments = self.parse_call_arguments()?;
+        Ok(Expression::Call(Call {
+            token,
+            function: Box::new(function),
+            arguments,
+        }))
+    }
+
+    fn parse_call_arguments(&mut self) -> Result<'a, Vec<Expression<'a>>> {
+        let mut arguments = Vec::new();
+
+        if self.peek_is(TokenKind::RParen) {
+            self.next_token();
+            return Ok(arguments);
+        }
+
+        arguments.push(self.parse_expression(None, ExpressionKind::Base)?);
+
+        while self.peek_is(TokenKind::Comma) {
+            self.next_token();
+            arguments.push(self.parse_expression(None, ExpressionKind::Base)?);
+        }
+
+        self.expect_next(TokenKind::RParen)?;
+
+        Ok(arguments)
+    }
+
+    fn unexpected_eof(&self) -> Error<'a> {
+        Error {
+            input: self.lexer.input,
+            span: Span {
+                start: self.lexer.input.len(),
+                end: self.lexer.input.len(),
+            },
+            kind: ErrorKind::Unexpected {
+                expected: "expression".to_string(),
+                found: None,
+            },
+        }
+    }
+
+    fn peek_expr_kind(&self) -> Result<'a, ExpressionKind> {
+        self.peek
+            .as_ref()
+            .map(|t| ExpressionKind::from(t.kind))
+            .ok_or_else(|| self.unexpected_eof())
     }
 
     fn parse_let_statement(&mut self, token: Token<'a>) -> Result<'a, Let<'a>> {
@@ -139,34 +262,204 @@ impl<'a> Parser<'a> {
             token: name_token,
         };
         self.expect_next(TokenKind::Assign)?;
-        while self
-            .next_token()
-            .as_ref()
-            .is_some_and(|t| t.kind != TokenKind::Semicolon)
-        {}
-
         Ok(Let {
+            value: self.parse_expression(None, ExpressionKind::Base)?,
             token,
             name,
-            value: Expression::Temp,
         })
     }
 
     fn parse_return_statement(&mut self, token: Token<'a>) -> Result<'a, Return<'a>> {
-        self.next_token();
-        while self
-            .next_token()
-            .as_ref()
-            .is_some_and(|t| t.kind != TokenKind::Semicolon)
-        {}
-
         Ok(Return {
             token,
-            value: Expression::Temp,
+            value: self.parse_expression(None, ExpressionKind::Base)?,
         })
+    }
+
+    pub fn parse_identifier(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+        Ok(Expression::Identifier(Identifier {
+            value: token.literal,
+            token,
+        }))
+    }
+
+    pub fn parse_integer(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+        let value = match token.literal.parse() {
+            Ok(value) => value,
+            Err(e) => {
+                return Err(Error {
+                    input: self.lexer.input,
+                    span: token.span,
+                    kind: ErrorKind::ParseInt(e),
+                });
+            }
+        };
+
+        Ok(Expression::Integer(Integer { value, token }))
+    }
+
+    pub fn parse_prefix(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+        Ok(Expression::Prefix(Prefix {
+            operator: match token.kind {
+                TokenKind::Not => PrefixOperator::Not,
+                TokenKind::Minus => PrefixOperator::Neg,
+                _ => unreachable!(),
+            },
+            operand: Box::new(self.parse_expression(None, ExpressionKind::Prefix)?),
+            token,
+        }))
+    }
+
+    fn parse_infix(
+        &mut self,
+        token: Token<'a>,
+        left: Expression<'a>,
+    ) -> Result<'a, Expression<'a>> {
+        let kind = ExpressionKind::from(token.kind);
+        let right = self.parse_expression(None, kind)?;
+        Ok(Expression::Infix(Infix {
+            left: Box::new(left),
+            operator: match token.kind {
+                TokenKind::Plus => InfixOperator::Add,
+                TokenKind::Minus => InfixOperator::Sub,
+                TokenKind::Mul => InfixOperator::Mul,
+                TokenKind::Div => InfixOperator::Div,
+                TokenKind::Eq => InfixOperator::Eq,
+                TokenKind::Neq => InfixOperator::Neq,
+                TokenKind::LT => InfixOperator::LT,
+                TokenKind::GT => InfixOperator::GT,
+                _ => unreachable!(),
+            },
+            right: Box::new(right),
+            token,
+        }))
+    }
+
+    pub fn parse_boolean(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+        Ok(Expression::Boolean(Boolean {
+            value: match token.literal {
+                "true" => true,
+                "false" => false,
+                _ => unreachable!(),
+            },
+            token,
+        }))
+    }
+
+    pub fn parse_grouped_expression(&mut self, _token: Token<'a>) -> Result<'a, Expression<'a>> {
+        let expr = self.parse_expression(None, ExpressionKind::Base)?;
+
+        self.expect_next(TokenKind::RParen)?;
+
+        Ok(expr)
+    }
+
+    pub fn parse_if(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+        self.expect_next(TokenKind::LParen)?;
+
+        let condition = self.parse_expression(None, ExpressionKind::Base)?;
+
+        self.expect_next(TokenKind::RParen)?;
+
+        let lbrace = self.expect_next(TokenKind::LBrace)?;
+        let consequence = self.parse_block_statement(lbrace)?;
+        let mut alternative = None;
+
+        if self.peek_is(TokenKind::Else) {
+            self.next_token();
+            let lbrace = self.expect_next(TokenKind::LBrace)?;
+            alternative = Some(self.parse_block_statement(lbrace)?);
+        }
+
+        Ok(Expression::If(If {
+            token,
+            condition: Box::new(condition),
+            consequence,
+            alternative,
+        }))
+    }
+
+    fn parse_block_statement(&mut self, token: Token<'a>) -> Result<'a, BlockStatement<'a>> {
+        let mut statements = Vec::new();
+        self.next_token();
+
+        while self
+            .current
+            .as_ref()
+            .is_some_and(|t| t.kind != TokenKind::RBrace)
+        {
+            statements.push(self.parse_statement()?);
+            self.next_token();
+        }
+
+        Ok(BlockStatement { token, statements })
+    }
+
+    pub fn parse_function(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+        self.expect_next(TokenKind::LParen)?;
+        let parameters = self.parse_function_parameters()?;
+        let lbrace = self.expect_next(TokenKind::LBrace)?;
+        let body = self.parse_block_statement(lbrace)?;
+        Ok(Expression::Function(Function {
+            token,
+            parameters,
+            body,
+        }))
+    }
+
+    fn parse_function_parameters(&mut self) -> Result<'a, Vec<Identifier<'a>>> {
+        let mut identifiers = Vec::new();
+
+        if self.peek_is(TokenKind::RParen) {
+            self.next_token();
+            return Ok(identifiers);
+        }
+
+        let first = self.expect_next(TokenKind::Ident)?;
+        identifiers.push(Identifier {
+            value: first.literal,
+            token: first,
+        });
+
+        while self.peek_is(TokenKind::Comma) {
+            self.next_token();
+            let next = self.expect_next(TokenKind::Ident)?;
+            identifiers.push(Identifier {
+                value: next.literal,
+                token: next,
+            });
+        }
+
+        self.expect_next(TokenKind::RParen)?;
+
+        Ok(identifiers)
     }
 }
 
 pub fn parse(input: &str) -> Result<Program, Vec<Error>> {
     Parser::new(input).parse_program()
+}
+
+#[derive(PartialEq, Eq, PartialOrd, Ord)]
+enum ExpressionKind {
+    Base,
+    Equal,
+    Cmp,
+    Sum,
+    Product,
+    Prefix,
+    Call,
+}
+
+impl From<TokenKind> for ExpressionKind {
+    fn from(value: TokenKind) -> Self {
+        match value {
+            TokenKind::Eq | TokenKind::Neq => ExpressionKind::Equal,
+            TokenKind::LT | TokenKind::GT => ExpressionKind::Cmp,
+            TokenKind::Plus | TokenKind::Minus => ExpressionKind::Sum,
+            TokenKind::Mul | TokenKind::Div => ExpressionKind::Product,
+            TokenKind::LParen => ExpressionKind::Call,
+            _ => ExpressionKind::Base,
+        }
+    }
 }
