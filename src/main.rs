@@ -13,7 +13,7 @@ fn main() {
         match rl.readline(">> ") {
             Ok(line) => {
                 let _ = rl.add_history_entry(&line);
-                let (debug, line) = match line.strip_prefix('?') {
+                let (debug, line) = match line.trim().strip_prefix('?') {
                     Some(line) => (true, line),
                     None => (false, line.as_str()),
                 };
