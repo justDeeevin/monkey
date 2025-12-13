@@ -6,9 +6,25 @@ mod parser;
 mod token;
 
 fn main() {
+    if let Some(file) = std::env::args().nth(1) {
+        let contents = std::fs::read_to_string(file).unwrap();
+        let program = match parser::parse(&contents) {
+            Ok(program) => program,
+            Err(errors) => {
+                for error in errors {
+                    error.report();
+                }
+                return;
+            }
+        };
+        println!("{program}");
+        return;
+    }
+
     println!("Monkey REPL");
     println!("Ctrl-D to exit");
     let mut rl = rustyline::DefaultEditor::new().unwrap();
+
     loop {
         match rl.readline(">> ") {
             Ok(line) => {
