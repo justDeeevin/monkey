@@ -1,13 +1,14 @@
 use crate::token::Token;
-use std::fmt::Display;
+use std::fmt::{Debug, Display};
 
 #[cfg(test)]
 mod test;
 
-pub trait Node: Display {
+pub trait Node: Display + Debug {
     fn literal(&self) -> &str;
 }
 
+#[derive(Debug)]
 pub struct Program<'a> {
     pub statements: Vec<Statement<'a>>,
 }
@@ -31,7 +32,7 @@ impl Node for Program<'_> {
     }
 }
 
-#[derive(strum::EnumDiscriminants)]
+#[derive(strum::EnumDiscriminants, Debug)]
 #[strum_discriminants(name(StatementKind))]
 pub enum Statement<'a> {
     Let(Let<'a>),
@@ -42,9 +43,9 @@ pub enum Statement<'a> {
 impl Display for Statement<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Let(l) => l.fmt(f),
-            Self::Return(r) => r.fmt(f),
-            Self::Expression(e) => e.fmt(f),
+            Self::Let(l) => Display::fmt(l, f),
+            Self::Return(r) => Display::fmt(r, f),
+            Self::Expression(e) => Display::fmt(e, f),
         }?;
 
         write!(f, ";")
@@ -61,7 +62,7 @@ impl Node for Statement<'_> {
     }
 }
 
-#[derive(strum::EnumDiscriminants)]
+#[derive(strum::EnumDiscriminants, Debug)]
 #[strum_discriminants(name(ExpressionKind))]
 pub enum Expression<'a> {
     Identifier(Identifier<'a>),
@@ -78,14 +79,14 @@ impl Display for Expression<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "(")?;
         match self {
-            Self::Identifier(i) => i.fmt(f),
-            Self::Integer(i) => i.fmt(f),
-            Self::Prefix(p) => p.fmt(f),
-            Self::Infix(i) => i.fmt(f),
-            Self::Boolean(b) => b.fmt(f),
-            Self::If(i) => i.fmt(f),
-            Self::Function(fun) => fun.fmt(f),
-            Self::Call(call) => call.fmt(f),
+            Self::Identifier(i) => Display::fmt(i, f),
+            Self::Integer(i) => Display::fmt(i, f),
+            Self::Prefix(p) => Display::fmt(p, f),
+            Self::Infix(i) => Display::fmt(i, f),
+            Self::Boolean(b) => Display::fmt(b, f),
+            Self::If(i) => Display::fmt(i, f),
+            Self::Function(fun) => Display::fmt(fun, f),
+            Self::Call(call) => Display::fmt(call, f),
         }?;
         write!(f, ")")
     }
@@ -106,6 +107,7 @@ impl Node for Expression<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Call<'a> {
     pub token: Token<'a>,
     pub function: Box<Expression<'a>>,
@@ -114,7 +116,7 @@ pub struct Call<'a> {
 
 impl Display for Call<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.function.fmt(f)?;
+        Display::fmt(&self.function, f)?;
         write!(f, "(")?;
         if !self.arguments.is_empty() {
             for argument in self.arguments.iter().take(self.arguments.len() - 1) {
@@ -132,6 +134,7 @@ impl Node for Call<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Function<'a> {
     pub token: Token<'a>,
     pub parameters: Vec<Identifier<'a>>,
@@ -148,7 +151,7 @@ impl Display for Function<'_> {
             write!(f, "{}", self.parameters.last().unwrap())?;
         }
         write!(f, ") ")?;
-        self.body.fmt(f)
+        Display::fmt(&self.body, f)
     }
 }
 
@@ -158,6 +161,7 @@ impl Node for Function<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct If<'a> {
     pub token: Token<'a>,
     pub condition: Box<Expression<'a>>,
@@ -165,6 +169,7 @@ pub struct If<'a> {
     pub alternative: Option<BlockStatement<'a>>,
 }
 
+#[derive(Debug)]
 pub struct BlockStatement<'a> {
     pub token: Token<'a>,
     pub statements: Vec<Statement<'a>>,
@@ -204,6 +209,7 @@ impl Node for If<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Boolean<'a> {
     pub token: Token<'a>,
     pub value: bool,
@@ -211,7 +217,7 @@ pub struct Boolean<'a> {
 
 impl Display for Boolean<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.value.fmt(f)
+        Display::fmt(&self.value, f)
     }
 }
 
@@ -221,6 +227,7 @@ impl Node for Boolean<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Infix<'a> {
     pub token: Token<'a>,
     pub left: Box<Expression<'a>>,
@@ -230,21 +237,21 @@ pub struct Infix<'a> {
 
 #[derive(strum::Display, PartialEq, Eq, Debug)]
 pub enum InfixOperator {
-    #[strum(serialize = "`+`")]
+    #[strum(serialize = "+")]
     Add,
-    #[strum(serialize = "`-`")]
+    #[strum(serialize = "-")]
     Sub,
-    #[strum(serialize = "`*`")]
+    #[strum(serialize = "*")]
     Mul,
-    #[strum(serialize = "`/`")]
+    #[strum(serialize = "/")]
     Div,
-    #[strum(serialize = "`==`")]
+    #[strum(serialize = "==")]
     Eq,
-    #[strum(serialize = "`!=`")]
+    #[strum(serialize = "!=")]
     Neq,
-    #[strum(serialize = "`<`")]
+    #[strum(serialize = "<")]
     LT,
-    #[strum(serialize = "`>`")]
+    #[strum(serialize = ">")]
     GT,
 }
 
@@ -260,6 +267,7 @@ impl Node for Infix<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Prefix<'a> {
     pub token: Token<'a>,
     pub operator: PrefixOperator,
@@ -277,8 +285,8 @@ pub enum PrefixOperator {
 
 impl Display for Prefix<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.operator.fmt(f)?;
-        self.operand.fmt(f)
+        Display::fmt(&self.operator, f)?;
+        Display::fmt(&self.operand, f)
     }
 }
 
@@ -288,6 +296,7 @@ impl Node for Prefix<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Integer<'a> {
     pub token: Token<'a>,
     pub value: i64,
@@ -295,7 +304,7 @@ pub struct Integer<'a> {
 
 impl Display for Integer<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.value.fmt(f)
+        Display::fmt(&self.value, f)
     }
 }
 
@@ -305,6 +314,7 @@ impl Node for Integer<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Let<'a> {
     pub token: Token<'a>,
     pub name: Identifier<'a>,
@@ -327,6 +337,7 @@ impl Node for Let<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Identifier<'a> {
     pub token: Token<'a>,
     pub value: &'a str,
@@ -334,7 +345,7 @@ pub struct Identifier<'a> {
 
 impl Display for Identifier<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.value.fmt(f)
+        Display::fmt(self.value, f)
     }
 }
 
@@ -344,6 +355,7 @@ impl Node for Identifier<'_> {
     }
 }
 
+#[derive(Debug)]
 pub struct Return<'a> {
     pub token: Token<'a>,
     pub value: Expression<'a>,
