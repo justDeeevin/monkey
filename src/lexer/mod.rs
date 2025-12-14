@@ -100,7 +100,7 @@ impl<'a> Iterator for Lexer<'a> {
                 }
                 TokenKind::Int
             }
-            _ => TokenKind::Illegal,
+            c => TokenKind::Illegal(c),
         };
 
         self.read_char();

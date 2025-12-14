@@ -12,7 +12,7 @@ pub struct Token<'a> {
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum TokenKind {
-    Illegal,
+    Illegal(char),
     Ident,
     Int,
     Null,
@@ -53,7 +53,7 @@ pub enum TokenKind {
 impl std::fmt::Display for TokenKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let str = match self {
-            Self::Illegal => "Illegal token",
+            Self::Illegal(c) => return write!(f, "Illegal token `{c}`"),
             Self::Ident => "Identifier",
             Self::Int => "Integer literal",
             Self::Null => "`null`",
