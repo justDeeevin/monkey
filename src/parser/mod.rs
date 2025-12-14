@@ -9,21 +9,20 @@ mod test;
 
 #[derive(thiserror::Error, Debug)]
 #[error("{kind}")]
-pub struct Error<'a> {
-    input: &'a str,
+pub struct Error {
     span: Span,
     kind: ErrorKind,
 }
 
-impl Error<'_> {
-    pub fn report(&self) {
+impl Error {
+    pub fn report(&self, input: &str) {
         use ariadne::{Color, Label, Report, ReportKind, Source};
 
         Report::build(ReportKind::Error, self.span)
             .with_message(self.to_string())
             .with_label(Label::new(self.span).with_color(Color::Red))
             .finish()
-            .eprint(("input", Source::from(self.input)))
+            .eprint(("input", Source::from(input)))
             .unwrap();
     }
 }
@@ -43,7 +42,7 @@ pub enum ErrorKind {
     ),
 }
 
-pub type Result<'a, T, E = Error<'a>> = std::result::Result<T, E>;
+pub type Result<'a, T, E = Error> = std::result::Result<T, E>;
 
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
@@ -76,7 +75,6 @@ impl<'a> Parser<'a> {
         match self.next_token().take() {
             Some(token) if token.kind == expected => Ok(token),
             found => Err(Error {
-                input,
                 span: Span {
                     start: found.as_ref().map(|t| t.span.start).unwrap_or(input.len()),
                     end: input.len(),
@@ -89,7 +87,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_program(mut self) -> Result<'a, Program<'a>, Vec<Error<'a>>> {
+    fn parse_program(mut self) -> Result<'a, Program<'a>, Vec<Error>> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
 
@@ -115,9 +113,8 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_statement(&mut self) -> Result<'a, Statement<'a>, Error<'a>> {
+    fn parse_statement(&mut self) -> Result<'a, Statement<'a>, Error> {
         let error = |found| Error {
-            input: self.lexer.input,
             span: Span {
                 start: self.lexer.input.len(),
                 end: self.lexer.input.len(),
@@ -165,7 +162,6 @@ impl<'a> Parser<'a> {
 
         let Some(prefix_parser) = token.kind.prefix_parse() else {
             return Err(Error {
-                input: self.lexer.input,
                 span: token.span,
                 kind: ErrorKind::Unexpected {
                     expected: "expression".to_string(),
@@ -228,9 +224,8 @@ impl<'a> Parser<'a> {
         Ok(arguments)
     }
 
-    fn unexpected_eof(&self) -> Error<'a> {
+    fn unexpected_eof(&self) -> Error {
         Error {
-            input: self.lexer.input,
             span: Span {
                 start: self.lexer.input.len(),
                 end: self.lexer.input.len(),
@@ -282,7 +277,6 @@ impl<'a> Parser<'a> {
             Ok(value) => value,
             Err(e) => {
                 return Err(Error {
-                    input: self.lexer.input,
                     span: token.span,
                     kind: ErrorKind::ParseInt(e),
                 });

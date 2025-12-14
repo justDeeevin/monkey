@@ -12,7 +12,7 @@ fn main() {
             Ok(program) => program,
             Err(errors) => {
                 for error in errors {
-                    error.report();
+                    error.report(&contents);
                 }
                 return;
             }
@@ -37,7 +37,7 @@ fn main() {
                     Ok(program) => program,
                     Err(errors) => {
                         for error in errors {
-                            error.report();
+                            error.report(line);
                         }
                         continue;
                     }
