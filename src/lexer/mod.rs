@@ -75,6 +75,13 @@ impl<'a> Iterator for Lexer<'a> {
             ',' => TokenKind::Comma,
             '{' => TokenKind::LBrace,
             '}' => TokenKind::RBrace,
+            '"' => {
+                while self.peek_char().is_some_and(|c| c != '"') {
+                    self.read_char();
+                }
+                self.read_char();
+                TokenKind::String
+            }
             c if c.is_alphabetic() || c == '_' => {
                 while self
                     .peek_char()
@@ -95,9 +102,21 @@ impl<'a> Iterator for Lexer<'a> {
 
         self.read_char();
 
+        let end = if kind == TokenKind::String {
+            self.pos - 1
+        } else {
+            self.pos
+        };
+
+        let literal_start = if kind == TokenKind::String {
+            start + 1
+        } else {
+            start
+        };
+
         Some(Token {
             kind,
-            literal: &self.input[start..self.pos],
+            literal: &self.input[literal_start..end],
             span: Span {
                 start,
                 end: self.pos,

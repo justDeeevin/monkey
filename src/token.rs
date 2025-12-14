@@ -16,6 +16,7 @@ pub enum TokenKind {
     Ident,
     Int,
     Null,
+    String,
 
     Assign,
     Plus,
@@ -53,6 +54,7 @@ impl std::fmt::Display for TokenKind {
             Self::Ident => "Identifier",
             Self::Int => "Integer literal",
             Self::Null => "`null`",
+            Self::String => "String literal",
 
             Self::Assign => "`=`",
             Self::Plus => "`+`",
@@ -100,6 +102,7 @@ impl TokenKind {
             Self::If => Some(Parser::parse_if),
             Self::Fn => Some(Parser::parse_function),
             Self::Null => Some(Parser::parse_null),
+            Self::String => Some(Parser::parse_string),
             _ => None,
         }
     }

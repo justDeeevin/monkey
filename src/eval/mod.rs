@@ -149,6 +149,9 @@ impl<'a> Environment<'a> {
                     (InfixOperator::Add, Object::Integer(left), Object::Integer(right)) => {
                         Ok(Object::Integer(left + right))
                     }
+                    (InfixOperator::Add, Object::String(left), Object::String(right)) => {
+                        Ok(Object::String(left + &right))
+                    }
                     (InfixOperator::Sub, Object::Integer(left), Object::Integer(right)) => {
                         Ok(Object::Integer(left - right))
                     }
@@ -266,6 +269,7 @@ impl<'a> Environment<'a> {
                 call_env.eval_block_statement(function.body.clone())
             }
             Expression::Null(_) => Ok(Object::Null),
+            Expression::String(String { value, .. }) => Ok(Object::String(value.to_string())),
         }
     }
 

@@ -14,6 +14,7 @@ pub enum Object<'a> {
     #[strum_discriminants(strum(serialize = "Null"))]
     Return(Box<Self>),
     Function(Rc<Function<'a>>),
+    String(String),
     Null,
 }
 
@@ -42,16 +43,17 @@ impl Object<'_> {
 impl std::fmt::Display for Object<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Object::Integer(i) => i.fmt(f),
-            Object::Boolean(b) => b.fmt(f),
-            Object::Null | Object::Return(_) => write!(f, "null"),
-            Object::Function(function) => {
+            Self::Integer(i) => i.fmt(f),
+            Self::Boolean(b) => b.fmt(f),
+            Self::Null | Object::Return(_) => write!(f, "null"),
+            Self::Function(function) => {
                 write!(f, "<function")?;
                 if let Some(this) = &function.this {
                     write!(f, " {this}")?;
                 }
                 write!(f, ">")
             }
+            Self::String(s) => write!(f, "\"{s}\""),
         }
     }
 }

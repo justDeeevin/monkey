@@ -83,6 +83,7 @@ pub enum Expression<'a> {
     Function(Function<'a>),
     Call(Call<'a>),
     Null(Token<'a>),
+    String(String<'a>),
 }
 
 impl Display for Expression<'_> {
@@ -98,6 +99,7 @@ impl Display for Expression<'_> {
             Self::Function(fun) => Display::fmt(fun, f),
             Self::Call(call) => Display::fmt(call, f),
             Self::Null(_) => write!(f, "null"),
+            Self::String(s) => Display::fmt(s, f),
         }?;
         write!(f, ")")
     }
@@ -115,7 +117,25 @@ impl Node for Expression<'_> {
             Self::Function(f) => f.span(),
             Self::Call(call) => call.span(),
             Self::Null(null) => null.span,
+            Self::String(s) => s.span(),
         }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct String<'a> {
+    pub token: Token<'a>,
+    pub value: &'a str,
+}
+
+impl Display for String<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        Display::fmt(&self.value, f)
+    }
+}
+impl Node for String<'_> {
+    fn span(&self) -> Span {
+        self.token.span
     }
 }
 

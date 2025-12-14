@@ -4,6 +4,8 @@ use crate::{
     token::{Span, Token, TokenKind},
 };
 
+use std::string::String as StdString;
+
 #[cfg(test)]
 pub mod test;
 
@@ -31,7 +33,7 @@ impl Error {
 pub enum ErrorKind {
     #[error("Unexpected token. Expected {expected}, found {}.", found.map(|k| k.to_string()).unwrap_or_else(|| "end of input".to_string()))]
     Unexpected {
-        expected: String,
+        expected: StdString,
         found: Option<TokenKind>,
     },
     #[error("Failed to parse integer literal.")]
@@ -402,6 +404,13 @@ impl<'a> Parser<'a> {
 
     pub fn parse_null(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
         Ok(Expression::Null(token))
+    }
+
+    pub fn parse_string(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+        Ok(Expression::String(String {
+            value: token.literal,
+            token,
+        }))
     }
 
     fn parse_function_parameters(&mut self) -> Result<'a, Vec<Identifier<'a>>> {
