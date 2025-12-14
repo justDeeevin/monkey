@@ -4,8 +4,6 @@ use crate::{
     token::{Span, Token, TokenKind},
 };
 
-use std::string::String as StdString;
-
 #[cfg(test)]
 pub mod test;
 
@@ -33,7 +31,7 @@ impl Error {
 pub enum ErrorKind {
     #[error("Unexpected token. Expected {expected}, found {}", found.map(|k| k.to_string()).unwrap_or_else(|| "end of input".to_string()))]
     Unexpected {
-        expected: StdString,
+        expected: String,
         found: Option<TokenKind>,
     },
     #[error("Failed to parse integer literal")]
@@ -130,8 +128,8 @@ impl<'a> Parser<'a> {
         };
 
         let out = match token.kind {
-            TokenKind::Let => Statement::Let(self.parse_let_statement(token)?),
-            TokenKind::Return => Statement::Return(self.parse_return_statement(token)?),
+            TokenKind::Let => self.parse_let_statement(token)?,
+            TokenKind::Return => self.parse_return_statement(token)?,
             _ => Statement::Expression(self.parse_expression_statement(token)?),
         };
 
@@ -200,11 +198,11 @@ impl<'a> Parser<'a> {
 
     fn parse_index(&mut self, array: Expression<'a>) -> Result<'a, Expression<'a>> {
         let index = self.parse_expression(None, ExpressionKind::Base)?;
-        Ok(Expression::Index(Index {
+        Ok(Expression::Index {
             array: Box::new(array),
             index: Box::new(index),
             close: self.expect_next(TokenKind::RBracket)?,
-        }))
+        })
     }
 
     fn parse_call(
@@ -213,12 +211,12 @@ impl<'a> Parser<'a> {
         open: Token<'a>,
     ) -> Result<'a, Expression<'a>> {
         let arguments = self.parse_call_arguments()?;
-        Ok(Expression::Call(Call {
+        Ok(Expression::Call {
             open,
             function: Box::new(function),
             arguments,
             close: self.expect_next(TokenKind::RParen)?,
-        }))
+        })
     }
 
     fn parse_call_arguments(&mut self) -> Result<'a, Vec<Expression<'a>>> {
@@ -258,22 +256,22 @@ impl<'a> Parser<'a> {
             .ok_or_else(|| self.unexpected_eof())
     }
 
-    fn parse_let_statement(&mut self, token: Token<'a>) -> Result<'a, Let<'a>> {
+    fn parse_let_statement(&mut self, token: Token<'a>) -> Result<'a, Statement<'a>> {
         let name_token = self.expect_next(TokenKind::Ident)?;
         let name = Identifier {
             value: name_token.literal,
             token: name_token,
         };
         self.expect_next(TokenKind::Assign)?;
-        Ok(Let {
+        Ok(Statement::Let {
             value: self.parse_expression(None, ExpressionKind::Base)?,
             let_token: token,
             name,
         })
     }
 
-    fn parse_return_statement(&mut self, token: Token<'a>) -> Result<'a, Return<'a>> {
-        Ok(Return {
+    fn parse_return_statement(&mut self, token: Token<'a>) -> Result<'a, Statement<'a>> {
+        Ok(Statement::Return {
             return_token: token,
             value: self.parse_expression(None, ExpressionKind::Base)?,
         })
@@ -297,11 +295,11 @@ impl<'a> Parser<'a> {
             }
         };
 
-        Ok(Expression::Integer(Integer { value, token }))
+        Ok(Expression::Integer { value, token })
     }
 
     pub fn parse_prefix(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
-        Ok(Expression::Prefix(Prefix {
+        Ok(Expression::Prefix {
             operator: match token.kind {
                 TokenKind::Not => PrefixOperator::Not,
                 TokenKind::Minus => PrefixOperator::Neg,
@@ -309,7 +307,7 @@ impl<'a> Parser<'a> {
             },
             operand: Box::new(self.parse_expression(None, ExpressionKind::Prefix)?),
             op_token: token,
-        }))
+        })
     }
 
     fn parse_infix(
@@ -319,7 +317,7 @@ impl<'a> Parser<'a> {
     ) -> Result<'a, Expression<'a>> {
         let kind = ExpressionKind::from(token.kind);
         let right = self.parse_expression(None, kind)?;
-        Ok(Expression::Infix(Infix {
+        Ok(Expression::Infix {
             left: Box::new(left),
             operator: match token.kind {
                 TokenKind::Plus => InfixOperator::Add,
@@ -333,18 +331,18 @@ impl<'a> Parser<'a> {
                 _ => unreachable!(),
             },
             right: Box::new(right),
-        }))
+        })
     }
 
     pub fn parse_boolean(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
-        Ok(Expression::Boolean(Boolean {
+        Ok(Expression::Boolean {
             value: match token.literal {
                 "true" => true,
                 "false" => false,
                 _ => unreachable!(),
             },
             token,
-        }))
+        })
     }
 
     pub fn parse_grouped_expression(&mut self, _token: Token<'a>) -> Result<'a, Expression<'a>> {
@@ -372,12 +370,12 @@ impl<'a> Parser<'a> {
             alternative = Some(self.parse_block_statement(lbrace)?);
         }
 
-        Ok(Expression::If(If {
+        Ok(Expression::If {
             if_token: token,
             condition: Box::new(condition),
             consequence,
             alternative,
-        }))
+        })
     }
 
     fn parse_block_statement(&mut self, open: Token<'a>) -> Result<'a, BlockStatement<'a>> {
@@ -404,11 +402,11 @@ impl<'a> Parser<'a> {
         let parameters = self.parse_function_parameters()?;
         let lbrace = self.expect_next(TokenKind::LBrace)?;
         let body = self.parse_block_statement(lbrace)?;
-        Ok(Expression::Function(Function {
+        Ok(Expression::Function {
             fn_token: token,
             parameters,
             body,
-        }))
+        })
     }
 
     pub fn parse_null(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
@@ -416,21 +414,21 @@ impl<'a> Parser<'a> {
     }
 
     pub fn parse_string(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
-        Ok(Expression::String(String {
+        Ok(Expression::String {
             value: token.literal,
             token,
-        }))
+        })
     }
 
     pub fn parse_array(&mut self, open: Token<'a>) -> Result<'a, Expression<'a>> {
         let mut elements = Vec::new();
 
         if self.peek_is(TokenKind::RBracket) {
-            return Ok(Expression::Array(Array {
+            return Ok(Expression::Array {
                 open,
                 elements,
                 close: self.expect_next(TokenKind::RBracket)?,
-            }));
+            });
         }
 
         elements.push(self.parse_expression(None, ExpressionKind::Base)?);
@@ -440,11 +438,11 @@ impl<'a> Parser<'a> {
             elements.push(self.parse_expression(None, ExpressionKind::Base)?);
         }
 
-        Ok(Expression::Array(Array {
+        Ok(Expression::Array {
             open,
             elements,
             close: self.expect_next(TokenKind::RBracket)?,
-        }))
+        })
     }
 
     fn parse_function_parameters(&mut self) -> Result<'a, Vec<Identifier<'a>>> {

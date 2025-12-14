@@ -4,7 +4,7 @@ use std::fmt::{Debug, Display};
 #[cfg(test)]
 mod test;
 
-pub trait Node: Display + Debug {
+pub trait Node: Display {
     fn span(&self) -> Span;
 }
 
@@ -44,16 +44,23 @@ impl Node for Program<'_> {
 #[derive(strum::EnumDiscriminants, Debug, Clone)]
 #[strum_discriminants(name(StatementKind))]
 pub enum Statement<'a> {
-    Let(Let<'a>),
-    Return(Return<'a>),
+    Let {
+        let_token: Token<'a>,
+        name: Identifier<'a>,
+        value: Expression<'a>,
+    },
+    Return {
+        return_token: Token<'a>,
+        value: Expression<'a>,
+    },
     Expression(Expression<'a>),
 }
 
 impl Display for Statement<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Let(l) => Display::fmt(l, f),
-            Self::Return(r) => Display::fmt(r, f),
+            Self::Let { name, value, .. } => write!(f, "let {name} = {value};"),
+            Self::Return { value, .. } => write!(f, "return {value};"),
             Self::Expression(e) => Display::fmt(e, f),
         }?;
 
@@ -64,8 +71,19 @@ impl Display for Statement<'_> {
 impl Node for Statement<'_> {
     fn span(&self) -> Span {
         match self {
-            Self::Let(l) => l.span(),
-            Self::Return(r) => r.span(),
+            Self::Let {
+                let_token, value, ..
+            } => Span {
+                start: let_token.span.start,
+                end: value.span().end,
+            },
+            Self::Return {
+                return_token,
+                value,
+            } => Span {
+                start: return_token.span.start,
+                end: value.span().end,
+            },
             Self::Expression(e) => e.span(),
         }
     }
@@ -75,17 +93,56 @@ impl Node for Statement<'_> {
 #[strum_discriminants(name(ExpressionKind))]
 pub enum Expression<'a> {
     Identifier(Identifier<'a>),
-    Integer(Integer<'a>),
-    Prefix(Prefix<'a>),
-    Infix(Infix<'a>),
-    Boolean(Boolean<'a>),
-    If(If<'a>),
-    Function(Function<'a>),
-    Call(Call<'a>),
+    Integer {
+        token: Token<'a>,
+        value: i64,
+    },
+    Prefix {
+        op_token: Token<'a>,
+        operator: PrefixOperator,
+        operand: Box<Self>,
+    },
+    Infix {
+        left: Box<Self>,
+        operator: InfixOperator,
+        right: Box<Self>,
+    },
+    Boolean {
+        token: Token<'a>,
+        value: bool,
+    },
+    If {
+        if_token: Token<'a>,
+        condition: Box<Self>,
+        consequence: BlockStatement<'a>,
+        alternative: Option<BlockStatement<'a>>,
+    },
+    Function {
+        fn_token: Token<'a>,
+        parameters: Vec<Identifier<'a>>,
+        body: BlockStatement<'a>,
+    },
+    Call {
+        function: Box<Self>,
+        open: Token<'a>,
+        arguments: Vec<Self>,
+        close: Token<'a>,
+    },
     Null(Token<'a>),
-    String(String<'a>),
-    Array(Array<'a>),
-    Index(Index<'a>),
+    String {
+        token: Token<'a>,
+        value: &'a str,
+    },
+    Array {
+        open: Token<'a>,
+        elements: Vec<Self>,
+        close: Token<'a>,
+    },
+    Index {
+        array: Box<Self>,
+        index: Box<Self>,
+        close: Token<'a>,
+    },
 }
 
 impl Display for Expression<'_> {
@@ -93,17 +150,71 @@ impl Display for Expression<'_> {
         write!(f, "(")?;
         match self {
             Self::Identifier(i) => Display::fmt(i, f),
-            Self::Integer(i) => Display::fmt(i, f),
-            Self::Prefix(p) => Display::fmt(p, f),
-            Self::Infix(i) => Display::fmt(i, f),
-            Self::Boolean(b) => Display::fmt(b, f),
-            Self::If(i) => Display::fmt(i, f),
-            Self::Function(fun) => Display::fmt(fun, f),
-            Self::Call(call) => Display::fmt(call, f),
+            Self::Integer { value, .. } => Display::fmt(value, f),
+            Self::Prefix {
+                operator, operand, ..
+            } => {
+                Display::fmt(operator, f)?;
+                Display::fmt(operand, f)
+            }
+            Self::Infix {
+                left,
+                operator,
+                right,
+            } => write!(f, "{left} {operator} {right}"),
+            Self::Boolean { value, .. } => Display::fmt(value, f),
+            Self::If {
+                condition,
+                consequence,
+                alternative,
+                ..
+            } => {
+                write!(f, "if {condition} {consequence}")?;
+                if let Some(alternative) = alternative {
+                    write!(f, " else {alternative}")?;
+                }
+                Ok(())
+            }
+            Self::Function {
+                parameters, body, ..
+            } => {
+                write!(f, "fn(")?;
+                if !parameters.is_empty() {
+                    for parameter in parameters.iter().take(parameters.len() - 1) {
+                        write!(f, "{}, ", parameter)?;
+                    }
+                    Display::fmt(parameters.last().unwrap(), f)?;
+                }
+                write!(f, ") ")?;
+                Display::fmt(body, f)
+            }
+            Self::Call {
+                function,
+                arguments,
+                ..
+            } => {
+                write!(f, "{function}(")?;
+                if !arguments.is_empty() {
+                    for argument in arguments.iter().take(arguments.len() - 1) {
+                        write!(f, "{}, ", argument)?;
+                    }
+                    Display::fmt(arguments.last().unwrap(), f)?;
+                }
+                write!(f, ")")
+            }
             Self::Null(_) => write!(f, "null"),
-            Self::String(s) => Display::fmt(s, f),
-            Self::Array(a) => Display::fmt(a, f),
-            Self::Index(i) => Display::fmt(i, f),
+            Self::String { value, .. } => Display::fmt(value, f),
+            Self::Array { elements, .. } => {
+                write!(f, "[")?;
+                if !elements.is_empty() {
+                    for element in elements.iter().take(elements.len() - 1) {
+                        write!(f, "{}, ", element)?;
+                    }
+                    Display::fmt(elements.last().unwrap(), f)?;
+                }
+                write!(f, "]")
+            }
+            Self::Index { array, index, .. } => write!(f, "{array}[{index}]"),
         }?;
         write!(f, ")")
     }
@@ -113,156 +224,52 @@ impl Node for Expression<'_> {
     fn span(&self) -> Span {
         match self {
             Self::Identifier(identifier) => identifier.span(),
-            Self::Integer(integer) => integer.span(),
-            Self::Prefix(prefix) => prefix.span(),
-            Self::Infix(infix) => infix.span(),
-            Self::Boolean(boolean) => boolean.span(),
-            Self::If(i) => i.span(),
-            Self::Function(f) => f.span(),
-            Self::Call(call) => call.span(),
+            Self::Integer { token, .. } => token.span,
+            Self::Prefix {
+                op_token, operand, ..
+            } => Span {
+                start: op_token.span.start,
+                end: operand.span().end,
+            },
+            Self::Infix { left, right, .. } => Span {
+                start: left.span().start,
+                end: right.span().end,
+            },
+            Self::Boolean { token, .. } => token.span,
+            Self::If {
+                if_token,
+                consequence,
+                alternative,
+                ..
+            } => Span {
+                start: if_token.span.start,
+                end: alternative
+                    .as_ref()
+                    .map(|s| s.span().end)
+                    .unwrap_or(consequence.span().end),
+            },
+            Self::Function { fn_token, body, .. } => Span {
+                start: fn_token.span.start,
+                end: body.span().end,
+            },
+            Self::Call {
+                function, close, ..
+            } => Span {
+                start: function.span().start,
+                end: close.span.end,
+            },
             Self::Null(null) => null.span,
-            Self::String(s) => s.span(),
-            Self::Array(a) => a.span(),
-            Self::Index(i) => i.span(),
+            Self::String { token, .. } => token.span,
+            Self::Array { open, close, .. } => Span {
+                start: open.span.start,
+                end: close.span.end,
+            },
+            Self::Index { array, close, .. } => Span {
+                start: array.span().start,
+                end: close.span.end,
+            },
         }
     }
-}
-
-#[derive(Debug, Clone)]
-pub struct Index<'a> {
-    pub array: Box<Expression<'a>>,
-    pub index: Box<Expression<'a>>,
-    pub close: Token<'a>,
-}
-
-impl Display for Index<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}[{}]", self.array, self.index)
-    }
-}
-
-impl Node for Index<'_> {
-    fn span(&self) -> Span {
-        Span {
-            start: self.array.span().start,
-            end: self.close.span.end,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Array<'a> {
-    pub open: Token<'a>,
-    pub elements: Vec<Expression<'a>>,
-    pub close: Token<'a>,
-}
-
-impl Display for Array<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[")?;
-        if !self.elements.is_empty() {
-            for element in self.elements.iter().take(self.elements.len() - 1) {
-                write!(f, "{}, ", element)?;
-            }
-            write!(f, "{}", self.elements.last().unwrap())?;
-        }
-        write!(f, "]")
-    }
-}
-
-impl Node for Array<'_> {
-    fn span(&self) -> Span {
-        Span {
-            start: self.open.span.start,
-            end: self.close.span.end,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct String<'a> {
-    pub token: Token<'a>,
-    pub value: &'a str,
-}
-
-impl Display for String<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.value, f)
-    }
-}
-impl Node for String<'_> {
-    fn span(&self) -> Span {
-        self.token.span
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Call<'a> {
-    pub open: Token<'a>,
-    pub function: Box<Expression<'a>>,
-    pub arguments: Vec<Expression<'a>>,
-    pub close: Token<'a>,
-}
-
-impl Display for Call<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.function, f)?;
-        write!(f, "(")?;
-        if !self.arguments.is_empty() {
-            for argument in self.arguments.iter().take(self.arguments.len() - 1) {
-                write!(f, "{}, ", argument)?;
-            }
-            write!(f, "{}", self.arguments.last().unwrap())?;
-        }
-        write!(f, ")")
-    }
-}
-
-impl Node for Call<'_> {
-    fn span(&self) -> Span {
-        Span {
-            start: self.function.span().start,
-            end: self.close.span.end,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Function<'a> {
-    pub fn_token: Token<'a>,
-    pub parameters: Vec<Identifier<'a>>,
-    pub body: BlockStatement<'a>,
-}
-
-impl Display for Function<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "fn(")?;
-        if !self.parameters.is_empty() {
-            for parameter in self.parameters.iter().take(self.parameters.len() - 1) {
-                write!(f, "{}, ", parameter)?;
-            }
-            write!(f, "{}", self.parameters.last().unwrap())?;
-        }
-        write!(f, ") ")?;
-        Display::fmt(&self.body, f)
-    }
-}
-
-impl Node for Function<'_> {
-    fn span(&self) -> Span {
-        Span {
-            start: self.fn_token.span.start,
-            end: self.body.span().end,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct If<'a> {
-    pub if_token: Token<'a>,
-    pub condition: Box<Expression<'a>>,
-    pub consequence: BlockStatement<'a>,
-    pub alternative: Option<BlockStatement<'a>>,
 }
 
 #[derive(Debug, Clone)]
@@ -291,56 +298,6 @@ impl Node for BlockStatement<'_> {
     }
 }
 
-impl Display for If<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "if {} {}", self.condition, self.consequence,)?;
-
-        if let Some(alternative) = &self.alternative {
-            write!(f, " else {}", alternative)?;
-        }
-
-        Ok(())
-    }
-}
-
-impl Node for If<'_> {
-    fn span(&self) -> Span {
-        Span {
-            start: self.if_token.span.start,
-            end: self
-                .alternative
-                .as_ref()
-                .map(|s| s.span().end)
-                .unwrap_or(self.consequence.span().end),
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Boolean<'a> {
-    pub token: Token<'a>,
-    pub value: bool,
-}
-
-impl Display for Boolean<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.value, f)
-    }
-}
-
-impl Node for Boolean<'_> {
-    fn span(&self) -> Span {
-        self.token.span
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Infix<'a> {
-    pub left: Box<Expression<'a>>,
-    pub operator: InfixOperator,
-    pub right: Box<Expression<'a>>,
-}
-
 #[derive(strum::Display, PartialEq, Eq, Debug, Clone, Copy)]
 pub enum InfixOperator {
     #[strum(serialize = "+")]
@@ -361,95 +318,12 @@ pub enum InfixOperator {
     GT,
 }
 
-impl Display for Infix<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{} {} {}", self.left, self.operator, self.right)
-    }
-}
-
-impl Node for Infix<'_> {
-    fn span(&self) -> Span {
-        Span {
-            start: self.left.span().start,
-            end: self.right.span().end,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Prefix<'a> {
-    pub op_token: Token<'a>,
-    pub operator: PrefixOperator,
-    // Boxed for indirection :<
-    pub operand: Box<Expression<'a>>,
-}
-
 #[derive(strum::Display, PartialEq, Eq, Debug, Clone, Copy)]
 pub enum PrefixOperator {
     #[strum(serialize = "!")]
     Not,
     #[strum(serialize = "-")]
     Neg,
-}
-
-impl Display for Prefix<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.operator, f)?;
-        Display::fmt(&self.operand, f)
-    }
-}
-
-impl Node for Prefix<'_> {
-    fn span(&self) -> Span {
-        Span {
-            start: self.op_token.span.start,
-            end: self.operand.span().end,
-        }
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Integer<'a> {
-    pub token: Token<'a>,
-    pub value: i64,
-}
-
-impl Display for Integer<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.value, f)
-    }
-}
-
-impl Node for Integer<'_> {
-    fn span(&self) -> Span {
-        self.token.span
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Let<'a> {
-    pub let_token: Token<'a>,
-    pub name: Identifier<'a>,
-    pub value: Expression<'a>,
-}
-
-impl Display for Let<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{} {} = {}",
-            self.let_token.literal, self.name.value, self.value
-        )
-    }
-}
-
-impl Node for Let<'_> {
-    fn span(&self) -> Span {
-        Span {
-            start: self.let_token.span.start,
-            end: self.value.span().end,
-        }
-    }
 }
 
 #[derive(Debug, Clone)]
@@ -475,26 +349,5 @@ impl Display for Identifier<'_> {
 impl Node for Identifier<'_> {
     fn span(&self) -> Span {
         self.token.span
-    }
-}
-
-#[derive(Debug, Clone)]
-pub struct Return<'a> {
-    pub return_token: Token<'a>,
-    pub value: Expression<'a>,
-}
-
-impl Display for Return<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "return {}", self.value)
-    }
-}
-
-impl Node for Return<'_> {
-    fn span(&self) -> Span {
-        Span {
-            start: self.return_token.span.start,
-            end: self.value.span().end,
-        }
     }
 }

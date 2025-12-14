@@ -1,9 +1,8 @@
-use std::rc::Rc;
-
 use crate::{
     ast::{BlockStatement, Identifier},
     eval::Environment,
 };
+use std::rc::Rc;
 
 #[derive(strum::EnumDiscriminants)]
 #[strum_discriminants(name(ObjectKind), derive(strum::Display))]
@@ -16,7 +15,7 @@ pub enum Object<'a> {
     Function(Rc<Function<'a>>),
     String(String),
     Null,
-    Array(Vec<Object<'a>>),
+    Array(Vec<Self>),
 }
 
 #[derive(Debug)]

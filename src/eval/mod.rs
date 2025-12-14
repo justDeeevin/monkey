@@ -94,10 +94,10 @@ impl<'a> Environment<'a> {
     fn eval_statement(&mut self, statement: Statement<'a>) -> Result<'a, Object<'a>> {
         match statement {
             Statement::Expression(expr) => self.eval_expression(expr, None),
-            Statement::Return(Return { value, .. }) => {
+            Statement::Return { value, .. } => {
                 Ok(Object::Return(Box::new(self.eval_expression(value, None)?)))
             }
-            Statement::Let(Let { name, value, .. }) => {
+            Statement::Let { name, value, .. } => {
                 let str = name.value;
                 let value = self.eval_expression(value, Some(name))?;
                 self.values.insert(str, value);
@@ -111,43 +111,32 @@ impl<'a> Environment<'a> {
         expr: Expression<'a>,
         ident: Option<Identifier<'a>>,
     ) -> Result<'a, Object<'a>> {
+        let span = expr.span();
         match expr {
-            Expression::Integer(int) => Ok(Object::Integer(int.value)),
-            Expression::Boolean(bool) => Ok(Object::Boolean(bool.value)),
-            Expression::Prefix(Prefix {
-                operator,
-                operand,
-                op_token,
-            }) => match operator {
+            Expression::Integer { value, .. } => Ok(Object::Integer(value)),
+            Expression::Boolean { value, .. } => Ok(Object::Boolean(value)),
+            Expression::Prefix {
+                operator, operand, ..
+            } => match operator {
                 PrefixOperator::Not => Ok(Object::Boolean(
                     !self.eval_expression(*operand, None)?.truthy(),
                 )),
-                PrefixOperator::Neg => {
-                    let span = Span {
-                        start: op_token.span.start,
-                        end: operand.span().end,
-                    };
-                    match self.eval_expression(*operand, None)? {
-                        Object::Integer(i) => Ok(Object::Integer(-i)),
-                        e => Err(vec![Error {
-                            span,
-                            kind: ErrorKind::InvalidOperand {
-                                operator,
-                                operand: e.into(),
-                            },
-                        }]),
-                    }
-                }
+                PrefixOperator::Neg => match self.eval_expression(*operand, None)? {
+                    Object::Integer(i) => Ok(Object::Integer(-i)),
+                    e => Err(vec![Error {
+                        span,
+                        kind: ErrorKind::InvalidOperand {
+                            operator,
+                            operand: e.into(),
+                        },
+                    }]),
+                },
             },
-            Expression::Infix(Infix {
+            Expression::Infix {
                 operator,
                 left,
                 right,
-            }) => {
-                let span = Span {
-                    start: left.span().start,
-                    end: right.span().end,
-                };
+            } => {
                 match (
                     operator,
                     self.eval_expression(*left, None)?,
@@ -196,12 +185,12 @@ impl<'a> Environment<'a> {
                     }]),
                 }
             }
-            Expression::If(If {
+            Expression::If {
                 condition,
                 consequence,
                 alternative,
                 ..
-            }) => {
+            } => {
                 if self.eval_expression(*condition, None)?.truthy() {
                     self.eval_block_statement(consequence)
                 } else if let Some(alternative) = alternative {
@@ -218,9 +207,9 @@ impl<'a> Environment<'a> {
                     }]
                 })
             }
-            Expression::Function(Function {
+            Expression::Function {
                 parameters, body, ..
-            }) => Ok(Object::Function(Rc::new(FunctionObject {
+            } => Ok(Object::Function(Rc::new(FunctionObject {
                 this: ident,
                 parameters,
                 body,
@@ -229,17 +218,12 @@ impl<'a> Environment<'a> {
                     values: HashMap::new(),
                 },
             }))),
-            Expression::Call(Call {
+            Expression::Call {
                 open,
                 function,
                 arguments,
                 close,
-            }) => {
-                let span = Span {
-                    start: function.span().start,
-                    end: close.span.end,
-                };
-
+            } => {
                 if let Expression::Identifier(Identifier { value, .. }) = *function
                     && let Some(intrinsic) = lookup_intrinsic(value)
                 {
@@ -288,23 +272,14 @@ impl<'a> Environment<'a> {
                 call_env.eval_block_statement(function.body.clone())
             }
             Expression::Null(_) => Ok(Object::Null),
-            Expression::String(String { value, .. }) => Ok(Object::String(value.to_string())),
-            Expression::Array(Array { elements, .. }) => Ok(Object::Array(
+            Expression::String { value, .. } => Ok(Object::String(value.to_string())),
+            Expression::Array { elements, .. } => Ok(Object::Array(
                 elements
                     .into_iter()
                     .map(|e| self.eval_expression(e, None))
                     .collect::<Result<'a, Vec<_>>>()?,
             )),
-            Expression::Index(Index {
-                array,
-                index,
-                close,
-            }) => {
-                let span = Span {
-                    start: array.span().start,
-                    end: close.span.end,
-                };
-
+            Expression::Index { array, index, .. } => {
                 let Object::Array(mut array) = self.eval_expression(*array, None)? else {
                     return Err(vec![Error {
                         span,

@@ -1,5 +1,4 @@
 use crate::{ast::*, parser::parse};
-use std::string::String as StdString;
 
 pub fn get_program(input: &str) -> Program<'_> {
     parse(input).unwrap_or_else(|errors| {
@@ -7,31 +6,31 @@ pub fn get_program(input: &str) -> Program<'_> {
             "failed to parse program:{}",
             errors
                 .into_iter()
-                .fold(StdString::new(), |acc, e| format!("{acc}\n{e}"))
+                .fold(String::new(), |acc, e| format!("{acc}\n{e}"))
         );
     })
 }
 
 fn test_let_statement(found: Statement<'_>, expected_name: &str) {
-    let Statement::Let(found) = found else {
+    let Statement::Let { name, .. } = found else {
         panic!(
             "expected let statement, got {:?}",
             StatementKind::from(found)
         );
     };
 
-    assert_eq!(found.name.value, expected_name);
+    assert_eq!(name.value, expected_name);
 }
 
 fn test_int_literal(expression: &Expression<'_>, expected_value: i64) {
-    let Expression::Integer(integer) = expression else {
+    let Expression::Integer { value, .. } = expression else {
         panic!(
             "expected integer expression, got {:?}",
             ExpressionKind::from(expression)
         );
     };
 
-    assert_eq!(integer.value, expected_value);
+    assert_eq!(*value, expected_value);
 }
 
 fn test_ident(expression: &Expression<'_>, value: &str) {
@@ -45,15 +44,15 @@ fn test_ident(expression: &Expression<'_>, value: &str) {
     assert_eq!(identifier.value, value);
 }
 
-fn test_boolean(expression: &Expression<'_>, value: bool) {
-    let Expression::Boolean(boolean) = expression else {
+fn test_boolean(expression: &Expression<'_>, expected_value: bool) {
+    let Expression::Boolean { value, .. } = expression else {
         panic!(
             "expected boolean expression, got {:?}",
             ExpressionKind::from(expression)
         );
     };
 
-    assert_eq!(boolean.value, value);
+    assert_eq!(*value, expected_value);
 }
 
 enum LiteralValue<'a> {
@@ -72,20 +71,25 @@ fn test_literal_expr<'a>(expression: &Expression<'a>, expected_value: LiteralVal
 
 fn test_infix_expr<'a>(
     expression: &Expression<'a>,
-    left: LiteralValue<'a>,
-    operator: InfixOperator,
-    right: LiteralValue<'_>,
+    expected_left: LiteralValue<'a>,
+    expected_operator: InfixOperator,
+    expected_right: LiteralValue<'_>,
 ) {
-    let Expression::Infix(infix) = expression else {
+    let Expression::Infix {
+        left,
+        operator,
+        right,
+    } = expression
+    else {
         panic!(
             "expected infix expression, got {:?}",
             ExpressionKind::from(expression)
         );
     };
 
-    test_literal_expr(&infix.left, left);
-    assert_eq!(infix.operator, operator);
-    test_literal_expr(&infix.right, right);
+    test_literal_expr(left, expected_left);
+    assert_eq!(*operator, expected_operator);
+    test_literal_expr(right, expected_right);
 }
 
 #[test]
@@ -184,16 +188,19 @@ fn prefix_expr() {
             );
         };
 
-        let Expression::Prefix(prefix) = expression else {
+        let Expression::Prefix {
+            operator, operand, ..
+        } = expression
+        else {
             panic!(
                 "expected prefix expression, got {:?}",
                 ExpressionKind::from(expression)
             );
         };
 
-        assert_eq!(prefix.operator, expected_operator);
+        assert_eq!(*operator, expected_operator);
 
-        test_int_literal(&prefix.operand, expected_operand);
+        test_int_literal(operand, expected_operand);
     }
 }
 
@@ -265,7 +272,13 @@ fn if_expr() {
         );
     };
 
-    let Expression::If(if_expr) = expression else {
+    let Expression::If {
+        condition,
+        consequence,
+        alternative,
+        ..
+    } = expression
+    else {
         panic!(
             "expected if expression, got {:?}",
             ExpressionKind::from(expression)
@@ -273,24 +286,24 @@ fn if_expr() {
     };
 
     test_infix_expr(
-        &if_expr.condition,
+        condition,
         LiteralValue::Identifier("x"),
         InfixOperator::LT,
         LiteralValue::Identifier("y"),
     );
 
-    assert_eq!(if_expr.consequence.statements.len(), 1);
+    assert_eq!(consequence.statements.len(), 1);
 
-    let Statement::Expression(consequence) = if_expr.consequence.statements.first().unwrap() else {
+    let Statement::Expression(consequence) = consequence.statements.first().unwrap() else {
         panic!(
             "expected expression statement, got {:?}",
-            StatementKind::from(if_expr.consequence.statements.first().unwrap())
+            StatementKind::from(consequence.statements.first().unwrap())
         );
     };
 
     test_literal_expr(consequence, LiteralValue::Identifier("x"));
 
-    assert!(if_expr.alternative.is_none());
+    assert!(alternative.is_none());
 }
 
 #[test]
@@ -308,7 +321,13 @@ fn if_else_expr() {
         );
     };
 
-    let Expression::If(if_expr) = expression else {
+    let Expression::If {
+        condition,
+        consequence,
+        alternative,
+        ..
+    } = expression
+    else {
         panic!(
             "expected if expression, got {:?}",
             ExpressionKind::from(expression)
@@ -316,24 +335,24 @@ fn if_else_expr() {
     };
 
     test_infix_expr(
-        &if_expr.condition,
+        condition,
         LiteralValue::Identifier("x"),
         InfixOperator::LT,
         LiteralValue::Identifier("y"),
     );
 
-    assert_eq!(if_expr.consequence.statements.len(), 1);
+    assert_eq!(consequence.statements.len(), 1);
 
-    let Statement::Expression(consequence) = if_expr.consequence.statements.first().unwrap() else {
+    let Statement::Expression(consequence) = consequence.statements.first().unwrap() else {
         panic!(
             "expected expression statement, got {:?}",
-            StatementKind::from(if_expr.consequence.statements.first().unwrap())
+            StatementKind::from(consequence.statements.first().unwrap())
         );
     };
 
     test_literal_expr(consequence, LiteralValue::Identifier("x"));
 
-    let Some(alternative) = &if_expr.alternative else {
+    let Some(alternative) = alternative else {
         panic!("expected alternative");
     };
 
@@ -364,24 +383,27 @@ fn fn_expr() {
         );
     };
 
-    let Expression::Function(function) = expression else {
+    let Expression::Function {
+        parameters, body, ..
+    } = expression
+    else {
         panic!(
             "expected function expression, got {:?}",
             ExpressionKind::from(expression)
         );
     };
 
-    assert_eq!(function.parameters.len(), 2);
+    assert_eq!(parameters.len(), 2);
 
-    assert_eq!(function.parameters[0].value, "x");
-    assert_eq!(function.parameters[1].value, "y");
+    assert_eq!(parameters[0].value, "x");
+    assert_eq!(parameters[1].value, "y");
 
-    assert_eq!(function.body.statements.len(), 1);
+    assert_eq!(body.statements.len(), 1);
 
-    let Statement::Expression(body) = function.body.statements.first().unwrap() else {
+    let Statement::Expression(body) = body.statements.first().unwrap() else {
         panic!(
             "expected expression statement, got {:?}",
-            StatementKind::from(function.body.statements.first().unwrap())
+            StatementKind::from(body.statements.first().unwrap())
         );
     };
 
@@ -410,16 +432,16 @@ fn fn_params() {
             );
         };
 
-        let Expression::Function(function) = expression else {
+        let Expression::Function { parameters, .. } = expression else {
             panic!(
                 "expected function expression, got {:?}",
                 ExpressionKind::from(expression)
             );
         };
 
-        assert_eq!(function.parameters.len(), expected.len());
+        assert_eq!(parameters.len(), expected.len());
 
-        for (expected, found) in expected.iter().zip(&function.parameters) {
+        for (expected, found) in expected.iter().zip(parameters) {
             assert_eq!(*expected, found.value);
         }
     }
@@ -439,26 +461,31 @@ fn call_expr() {
         );
     };
 
-    let Expression::Call(call) = expression else {
+    let Expression::Call {
+        function,
+        arguments,
+        ..
+    } = expression
+    else {
         panic!(
             "expected call expression, got {:?}",
             ExpressionKind::from(expression)
         );
     };
 
-    test_ident(&call.function, "add");
+    test_ident(function, "add");
 
-    assert_eq!(call.arguments.len(), 3);
+    assert_eq!(arguments.len(), 3);
 
-    test_literal_expr(&call.arguments[0], LiteralValue::Integer(1));
+    test_literal_expr(&arguments[0], LiteralValue::Integer(1));
     test_infix_expr(
-        &call.arguments[1],
+        &arguments[1],
         LiteralValue::Integer(2),
         InfixOperator::Mul,
         LiteralValue::Integer(3),
     );
     test_infix_expr(
-        &call.arguments[2],
+        &arguments[2],
         LiteralValue::Integer(4),
         InfixOperator::Add,
         LiteralValue::Integer(5),

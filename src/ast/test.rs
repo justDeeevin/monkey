@@ -3,7 +3,7 @@ use crate::{ast::*, token::*};
 #[test]
 fn display() {
     let program = Program {
-        statements: vec![Statement::Let(Let {
+        statements: vec![Statement::Let {
             let_token: Token {
                 kind: TokenKind::Let,
                 literal: "let",
@@ -25,7 +25,7 @@ fn display() {
                 },
                 value: "anotherVar",
             }),
-        })],
+        }],
     };
 
     assert_eq!(program.to_string().trim(), "let myVar = (anotherVar);");
