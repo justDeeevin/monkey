@@ -77,7 +77,7 @@ impl<'a> Parser<'a> {
             found => Err(Error {
                 span: Span {
                     start: found.as_ref().map(|t| t.span.start).unwrap_or(input.len()),
-                    end: input.len(),
+                    end: found.as_ref().map(|t| t.span.end).unwrap_or(input.len()),
                 },
                 kind: ErrorKind::Unexpected {
                     expected: expected.to_string(),
