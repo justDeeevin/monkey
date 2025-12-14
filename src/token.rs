@@ -37,6 +37,8 @@ pub enum TokenKind {
     RParen,
     LBrace,
     RBrace,
+    LBracket,
+    RBracket,
 
     Fn,
     Let,
@@ -75,6 +77,8 @@ impl std::fmt::Display for TokenKind {
             Self::RParen => "`)`",
             Self::LBrace => "`{`",
             Self::RBrace => "`}`",
+            Self::LBracket => "`[`",
+            Self::RBracket => "`]`",
 
             Self::Fn => "`fn`",
             Self::Let => "`let`",
@@ -103,6 +107,7 @@ impl TokenKind {
             Self::Fn => Some(Parser::parse_function),
             Self::Null => Some(Parser::parse_null),
             Self::String => Some(Parser::parse_string),
+            Self::LBracket => Some(Parser::parse_array),
             _ => None,
         }
     }
@@ -118,6 +123,8 @@ impl TokenKind {
                 | Self::Neq
                 | Self::LT
                 | Self::GT
+                | Self::LParen
+                | Self::LBracket
         )
     }
 }

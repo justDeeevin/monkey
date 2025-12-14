@@ -84,6 +84,8 @@ pub enum Expression<'a> {
     Call(Call<'a>),
     Null(Token<'a>),
     String(String<'a>),
+    Array(Array<'a>),
+    Index(Index<'a>),
 }
 
 impl Display for Expression<'_> {
@@ -100,6 +102,8 @@ impl Display for Expression<'_> {
             Self::Call(call) => Display::fmt(call, f),
             Self::Null(_) => write!(f, "null"),
             Self::String(s) => Display::fmt(s, f),
+            Self::Array(a) => Display::fmt(a, f),
+            Self::Index(i) => Display::fmt(i, f),
         }?;
         write!(f, ")")
     }
@@ -118,6 +122,59 @@ impl Node for Expression<'_> {
             Self::Call(call) => call.span(),
             Self::Null(null) => null.span,
             Self::String(s) => s.span(),
+            Self::Array(a) => a.span(),
+            Self::Index(i) => i.span(),
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Index<'a> {
+    pub array: Box<Expression<'a>>,
+    pub index: Box<Expression<'a>>,
+    pub close: Token<'a>,
+}
+
+impl Display for Index<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}[{}]", self.array, self.index)
+    }
+}
+
+impl Node for Index<'_> {
+    fn span(&self) -> Span {
+        Span {
+            start: self.array.span().start,
+            end: self.close.span.end,
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct Array<'a> {
+    pub open: Token<'a>,
+    pub elements: Vec<Expression<'a>>,
+    pub close: Token<'a>,
+}
+
+impl Display for Array<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[")?;
+        if !self.elements.is_empty() {
+            for element in self.elements.iter().take(self.elements.len() - 1) {
+                write!(f, "{}, ", element)?;
+            }
+            write!(f, "{}", self.elements.last().unwrap())?;
+        }
+        write!(f, "]")
+    }
+}
+
+impl Node for Array<'_> {
+    fn span(&self) -> Span {
+        Span {
+            start: self.open.span.start,
+            end: self.close.span.end,
         }
     }
 }

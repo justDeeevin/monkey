@@ -16,6 +16,7 @@ pub enum Object<'a> {
     Function(Rc<Function<'a>>),
     String(String),
     Null,
+    Array(Vec<Object<'a>>),
 }
 
 #[derive(Debug)]
@@ -54,6 +55,16 @@ impl std::fmt::Display for Object<'_> {
                 write!(f, ">")
             }
             Self::String(s) => s.fmt(f),
+            Self::Array(a) => {
+                write!(f, "[")?;
+                if !a.is_empty() {
+                    for element in a.iter().take(a.len() - 1) {
+                        write!(f, "{}, ", element)?;
+                    }
+                    write!(f, "{}", a.last().unwrap())?;
+                }
+                write!(f, "]")
+            }
         }
     }
 }

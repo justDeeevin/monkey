@@ -49,6 +49,12 @@ pub enum ErrorKind<'a> {
     NotAFunction,
     #[error("Expected {expected} arguments, got {got}")]
     WrongNumberOfArguments { expected: usize, got: usize },
+    #[error("Cannot index into a non-array")]
+    NotAnArray,
+    #[error("Cannot index an array with a non-integer")]
+    NotAnIndex,
+    #[error("Out of bounds: index was {i} but length was {len}")]
+    OutOfBounds { i: i64, len: usize },
 }
 
 pub type Result<'a, T, E = Vec<Error<'a>>> = std::result::Result<T, E>;
@@ -283,6 +289,50 @@ impl<'a> Environment<'a> {
             }
             Expression::Null(_) => Ok(Object::Null),
             Expression::String(String { value, .. }) => Ok(Object::String(value.to_string())),
+            Expression::Array(Array { elements, .. }) => Ok(Object::Array(
+                elements
+                    .into_iter()
+                    .map(|e| self.eval_expression(e, None))
+                    .collect::<Result<'a, Vec<_>>>()?,
+            )),
+            Expression::Index(Index {
+                array,
+                index,
+                close,
+            }) => {
+                let span = Span {
+                    start: array.span().start,
+                    end: close.span.end,
+                };
+
+                let Object::Array(mut array) = self.eval_expression(*array, None)? else {
+                    return Err(vec![Error {
+                        span,
+                        kind: ErrorKind::NotAnArray,
+                    }]);
+                };
+
+                let span = index.span();
+
+                let Object::Integer(index) = self.eval_expression(*index, None)? else {
+                    return Err(vec![Error {
+                        span,
+                        kind: ErrorKind::NotAnIndex,
+                    }]);
+                };
+
+                if index < 0 || index >= array.len() as i64 {
+                    return Err(vec![Error {
+                        span,
+                        kind: ErrorKind::OutOfBounds {
+                            i: index,
+                            len: array.len(),
+                        },
+                    }]);
+                }
+
+                Ok(array.remove(index as usize))
+            }
         }
     }
 

@@ -182,20 +182,29 @@ impl<'a> Parser<'a> {
             let Some(peek) = self.peek.take() else {
                 return Ok(left);
             };
-            if !peek.kind.is_infix() && peek.kind != TokenKind::LParen {
+            if !peek.kind.is_infix() {
                 return Ok(left);
             };
 
             self.next_token();
 
-            if peek.kind == TokenKind::LParen {
-                left = self.parse_call(left, peek)?;
-            } else {
-                left = self.parse_infix(peek, left)?;
+            match peek.kind {
+                TokenKind::LParen => left = self.parse_call(left, peek)?,
+                TokenKind::LBracket => left = self.parse_index(left)?,
+                _ => left = self.parse_infix(peek, left)?,
             }
         }
 
         Ok(left)
+    }
+
+    fn parse_index(&mut self, array: Expression<'a>) -> Result<'a, Expression<'a>> {
+        let index = self.parse_expression(None, ExpressionKind::Base)?;
+        Ok(Expression::Index(Index {
+            array: Box::new(array),
+            index: Box::new(index),
+            close: self.expect_next(TokenKind::RBracket)?,
+        }))
     }
 
     fn parse_call(
@@ -413,6 +422,31 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    pub fn parse_array(&mut self, open: Token<'a>) -> Result<'a, Expression<'a>> {
+        let mut elements = Vec::new();
+
+        if self.peek_is(TokenKind::RBracket) {
+            return Ok(Expression::Array(Array {
+                open,
+                elements,
+                close: self.expect_next(TokenKind::RBracket)?,
+            }));
+        }
+
+        elements.push(self.parse_expression(None, ExpressionKind::Base)?);
+
+        while self.peek_is(TokenKind::Comma) {
+            self.next_token();
+            elements.push(self.parse_expression(None, ExpressionKind::Base)?);
+        }
+
+        Ok(Expression::Array(Array {
+            open,
+            elements,
+            close: self.expect_next(TokenKind::RBracket)?,
+        }))
+    }
+
     fn parse_function_parameters(&mut self) -> Result<'a, Vec<Identifier<'a>>> {
         let mut identifiers = Vec::new();
 
@@ -455,6 +489,7 @@ enum ExpressionKind {
     Product,
     Prefix,
     Call,
+    Index,
 }
 
 impl From<TokenKind> for ExpressionKind {
@@ -465,6 +500,7 @@ impl From<TokenKind> for ExpressionKind {
             TokenKind::Plus | TokenKind::Minus => ExpressionKind::Sum,
             TokenKind::Mul | TokenKind::Div => ExpressionKind::Product,
             TokenKind::LParen => ExpressionKind::Call,
+            TokenKind::LBracket => ExpressionKind::Index,
             _ => ExpressionKind::Base,
         }
     }
