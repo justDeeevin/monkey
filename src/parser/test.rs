@@ -12,8 +12,6 @@ fn get_program(input: &str) -> Program<'_> {
 }
 
 fn test_let_statement(found: Statement<'_>, expected_name: &str) {
-    assert_eq!(found.literal(), "let");
-
     let Statement::Let(found) = found else {
         panic!(
             "expected let statement, got {:?}",
@@ -22,8 +20,6 @@ fn test_let_statement(found: Statement<'_>, expected_name: &str) {
     };
 
     assert_eq!(found.name.value, expected_name);
-
-    assert_eq!(found.name.literal(), expected_name);
 }
 
 fn test_int_literal(expression: &Expression<'_>, expected_value: i64) {
@@ -35,7 +31,6 @@ fn test_int_literal(expression: &Expression<'_>, expected_value: i64) {
     };
 
     assert_eq!(integer.value, expected_value);
-    assert_eq!(integer.literal(), expected_value.to_string());
 }
 
 fn test_ident(expression: &Expression<'_>, value: &str) {
@@ -47,7 +42,6 @@ fn test_ident(expression: &Expression<'_>, value: &str) {
     };
 
     assert_eq!(identifier.value, value);
-    assert_eq!(identifier.literal(), value);
 }
 
 fn test_boolean(expression: &Expression<'_>, value: bool) {
@@ -59,7 +53,6 @@ fn test_boolean(expression: &Expression<'_>, value: bool) {
     };
 
     assert_eq!(boolean.value, value);
-    assert_eq!(boolean.literal(), value.to_string());
 }
 
 enum LiteralValue<'a> {
@@ -125,7 +118,6 @@ return 993322;
     assert_eq!(program.statements.len(), 3);
 
     for statement in program.statements {
-        assert_eq!(statement.literal(), "return");
         assert_eq!(StatementKind::from(statement), StatementKind::Return);
     }
 }
@@ -153,7 +145,6 @@ fn ident_expr() {
     };
 
     assert_eq!(ident.value, "foobar");
-    assert_eq!(ident.literal(), "foobar");
 }
 
 #[test]

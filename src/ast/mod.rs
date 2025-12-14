@@ -1,11 +1,11 @@
-use crate::token::Token;
+use crate::token::{Span, Token};
 use std::fmt::{Debug, Display};
 
 #[cfg(test)]
 mod test;
 
 pub trait Node: Display + Debug {
-    fn literal(&self) -> &str;
+    fn span(&self) -> Span;
 }
 
 #[derive(Debug)]
@@ -24,11 +24,20 @@ impl Display for Program<'_> {
 }
 
 impl Node for Program<'_> {
-    fn literal(&self) -> &str {
-        self.statements
+    fn span(&self) -> Span {
+        let start = self
+            .statements
             .first()
-            .map(Node::literal)
-            .unwrap_or_default()
+            .map(|s| s.span().start)
+            .unwrap_or_default();
+
+        let end = self
+            .statements
+            .last()
+            .map(|s| s.span().end)
+            .unwrap_or_default();
+
+        Span { start, end }
     }
 }
 
@@ -53,11 +62,11 @@ impl Display for Statement<'_> {
 }
 
 impl Node for Statement<'_> {
-    fn literal(&self) -> &str {
+    fn span(&self) -> Span {
         match self {
-            Self::Let(l) => l.literal(),
-            Self::Return(r) => r.literal(),
-            Self::Expression(e) => e.literal(),
+            Self::Let(l) => l.span(),
+            Self::Return(r) => r.span(),
+            Self::Expression(e) => e.span(),
         }
     }
 }
@@ -93,25 +102,25 @@ impl Display for Expression<'_> {
 }
 
 impl Node for Expression<'_> {
-    fn literal(&self) -> &str {
+    fn span(&self) -> Span {
         match self {
-            Self::Identifier(identifier) => identifier.literal(),
-            Self::Integer(integer) => integer.literal(),
-            Self::Prefix(prefix) => prefix.literal(),
-            Self::Infix(infix) => infix.literal(),
-            Self::Boolean(boolean) => boolean.literal(),
-            Self::If(i) => i.literal(),
-            Self::Function(f) => f.literal(),
-            Self::Call(call) => call.literal(),
+            Self::Identifier(identifier) => identifier.span(),
+            Self::Integer(integer) => integer.span(),
+            Self::Prefix(prefix) => prefix.span(),
+            Self::Infix(infix) => infix.span(),
+            Self::Boolean(boolean) => boolean.span(),
+            Self::If(i) => i.span(),
+            Self::Function(f) => f.span(),
+            Self::Call(call) => call.span(),
         }
     }
 }
 
 #[derive(Debug)]
 pub struct Call<'a> {
-    pub token: Token<'a>,
     pub function: Box<Expression<'a>>,
     pub arguments: Vec<Expression<'a>>,
+    pub close: Token<'a>,
 }
 
 impl Display for Call<'_> {
@@ -129,8 +138,11 @@ impl Display for Call<'_> {
 }
 
 impl Node for Call<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        Span {
+            start: self.function.span().start,
+            end: self.close.span.end,
+        }
     }
 }
 
@@ -156,8 +168,11 @@ impl Display for Function<'_> {
 }
 
 impl Node for Function<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        Span {
+            start: self.token.span.start,
+            end: self.body.span().end,
+        }
     }
 }
 
@@ -171,8 +186,9 @@ pub struct If<'a> {
 
 #[derive(Debug)]
 pub struct BlockStatement<'a> {
-    pub token: Token<'a>,
+    pub open: Token<'a>,
     pub statements: Vec<Statement<'a>>,
+    pub close: Token<'a>,
 }
 
 impl Display for BlockStatement<'_> {
@@ -186,8 +202,11 @@ impl Display for BlockStatement<'_> {
 }
 
 impl Node for BlockStatement<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        Span {
+            start: self.open.span.start,
+            end: self.close.span.end,
+        }
     }
 }
 
@@ -204,8 +223,15 @@ impl Display for If<'_> {
 }
 
 impl Node for If<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        Span {
+            start: self.token.span.start,
+            end: self
+                .alternative
+                .as_ref()
+                .map(|s| s.span().end)
+                .unwrap_or(self.consequence.span().end),
+        }
     }
 }
 
@@ -222,8 +248,8 @@ impl Display for Boolean<'_> {
 }
 
 impl Node for Boolean<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        self.token.span
     }
 }
 
@@ -262,8 +288,11 @@ impl Display for Infix<'_> {
 }
 
 impl Node for Infix<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        Span {
+            start: self.left.span().start,
+            end: self.right.span().end,
+        }
     }
 }
 
@@ -291,8 +320,11 @@ impl Display for Prefix<'_> {
 }
 
 impl Node for Prefix<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        Span {
+            start: self.token.span.start,
+            end: self.operand.span().end,
+        }
     }
 }
 
@@ -309,8 +341,8 @@ impl Display for Integer<'_> {
 }
 
 impl Node for Integer<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        self.token.span
     }
 }
 
@@ -332,8 +364,11 @@ impl Display for Let<'_> {
 }
 
 impl Node for Let<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        Span {
+            start: self.token.span.start,
+            end: self.value.span().end,
+        }
     }
 }
 
@@ -350,8 +385,8 @@ impl Display for Identifier<'_> {
 }
 
 impl Node for Identifier<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        self.token.span
     }
 }
 
@@ -368,7 +403,10 @@ impl Display for Return<'_> {
 }
 
 impl Node for Return<'_> {
-    fn literal(&self) -> &str {
-        self.token.literal
+    fn span(&self) -> Span {
+        Span {
+            start: self.token.span.start,
+            end: self.value.span().end,
+        }
     }
 }

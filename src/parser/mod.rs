@@ -192,7 +192,7 @@ impl<'a> Parser<'a> {
             self.next_token();
 
             if peek.kind == TokenKind::LParen {
-                left = self.parse_call(peek, left)?;
+                left = self.parse_call(left)?;
             } else {
                 left = self.parse_infix(peek, left)?;
             }
@@ -201,16 +201,12 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
-    fn parse_call(
-        &mut self,
-        token: Token<'a>,
-        function: Expression<'a>,
-    ) -> Result<'a, Expression<'a>> {
+    fn parse_call(&mut self, function: Expression<'a>) -> Result<'a, Expression<'a>> {
         let arguments = self.parse_call_arguments()?;
         Ok(Expression::Call(Call {
-            token,
             function: Box::new(function),
             arguments,
+            close: self.expect_next(TokenKind::RParen)?,
         }))
     }
 
@@ -228,8 +224,6 @@ impl<'a> Parser<'a> {
             self.next_token();
             arguments.push(self.parse_expression(None, ExpressionKind::Base)?);
         }
-
-        self.expect_next(TokenKind::RParen)?;
 
         Ok(arguments)
     }
@@ -379,20 +373,23 @@ impl<'a> Parser<'a> {
         }))
     }
 
-    fn parse_block_statement(&mut self, token: Token<'a>) -> Result<'a, BlockStatement<'a>> {
+    fn parse_block_statement(&mut self, open: Token<'a>) -> Result<'a, BlockStatement<'a>> {
         let mut statements = Vec::new();
-        self.next_token();
 
         while self
-            .current
+            .peek
             .as_ref()
             .is_some_and(|t| t.kind != TokenKind::RBrace)
         {
-            statements.push(self.parse_statement()?);
             self.next_token();
+            statements.push(self.parse_statement()?);
         }
 
-        Ok(BlockStatement { token, statements })
+        Ok(BlockStatement {
+            open,
+            statements,
+            close: self.expect_next(TokenKind::RBrace)?,
+        })
     }
 
     pub fn parse_function(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
