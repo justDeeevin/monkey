@@ -332,14 +332,6 @@ pub struct Identifier<'a> {
     pub value: &'a str,
 }
 
-impl PartialEq for Identifier<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.value == other.value
-    }
-}
-
-impl Eq for Identifier<'_> {}
-
 impl Display for Identifier<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         Display::fmt(self.value, f)
