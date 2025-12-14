@@ -210,7 +210,6 @@ impl<'a> Parser<'a> {
         let mut arguments = Vec::new();
 
         if self.peek_is(TokenKind::RParen) {
-            self.next_token();
             return Ok(arguments);
         }
 
