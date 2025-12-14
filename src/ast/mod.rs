@@ -82,6 +82,7 @@ pub enum Expression<'a> {
     If(If<'a>),
     Function(Function<'a>),
     Call(Call<'a>),
+    Null(Token<'a>),
 }
 
 impl Display for Expression<'_> {
@@ -96,6 +97,7 @@ impl Display for Expression<'_> {
             Self::If(i) => Display::fmt(i, f),
             Self::Function(fun) => Display::fmt(fun, f),
             Self::Call(call) => Display::fmt(call, f),
+            Self::Null(_) => write!(f, "null"),
         }?;
         write!(f, ")")
     }
@@ -112,6 +114,7 @@ impl Node for Expression<'_> {
             Self::If(i) => i.span(),
             Self::Function(f) => f.span(),
             Self::Call(call) => call.span(),
+            Self::Null(null) => null.span,
         }
     }
 }

@@ -15,6 +15,7 @@ pub enum TokenKind {
     Illegal,
     Ident,
     Int,
+    Null,
 
     Assign,
     Plus,
@@ -51,6 +52,7 @@ impl std::fmt::Display for TokenKind {
             Self::Illegal => "Illegal token",
             Self::Ident => "Identifier",
             Self::Int => "Integer literal",
+            Self::Null => "`null`",
 
             Self::Assign => "`=`",
             Self::Plus => "`+`",
@@ -97,6 +99,7 @@ impl TokenKind {
             Self::LParen => Some(Parser::parse_grouped_expression),
             Self::If => Some(Parser::parse_if),
             Self::Fn => Some(Parser::parse_function),
+            Self::Null => Some(Parser::parse_null),
             _ => None,
         }
     }
@@ -171,6 +174,7 @@ pub fn lookup_keyword(input: &str) -> Option<TokenKind> {
         "if" => Some(TokenKind::If),
         "else" => Some(TokenKind::Else),
         "return" => Some(TokenKind::Return),
+        "null" => Some(TokenKind::Null),
         _ => None,
     }
 }

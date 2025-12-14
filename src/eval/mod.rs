@@ -265,6 +265,7 @@ impl<'a> Environment<'a> {
 
                 call_env.eval_block_statement(function.body.clone())
             }
+            Expression::Null(_) => Ok(Object::Null),
         }
     }
 

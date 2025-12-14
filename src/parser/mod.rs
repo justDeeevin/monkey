@@ -400,6 +400,10 @@ impl<'a> Parser<'a> {
         }))
     }
 
+    pub fn parse_null(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+        Ok(Expression::Null(token))
+    }
+
     fn parse_function_parameters(&mut self) -> Result<'a, Vec<Identifier<'a>>> {
         let mut identifiers = Vec::new();
 
