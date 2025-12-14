@@ -1,6 +1,6 @@
 use crate::{eval::Environment, object::Object};
 
-fn test_eval(input: &str) -> Object {
+fn test_eval(input: &str) -> Object<'_> {
     Environment::default()
         .eval_program(crate::parser::test::get_program(input))
         .unwrap_or_else(|errors| {

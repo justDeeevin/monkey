@@ -442,7 +442,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub fn parse(input: &str) -> Result<Program, Vec<Error>> {
+pub fn parse(input: &str) -> Result<'_, Program<'_>, Vec<Error>> {
     Parser::new(input).parse_program()
 }
 

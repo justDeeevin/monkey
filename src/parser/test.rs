@@ -1,4 +1,5 @@
 use crate::{ast::*, parser::parse};
+use std::string::String as StdString;
 
 pub fn get_program(input: &str) -> Program<'_> {
     parse(input).unwrap_or_else(|errors| {
@@ -6,7 +7,7 @@ pub fn get_program(input: &str) -> Program<'_> {
             "failed to parse program:{}",
             errors
                 .into_iter()
-                .fold(String::new(), |acc, e| format!("{acc}\n{e}"))
+                .fold(StdString::new(), |acc, e| format!("{acc}\n{e}"))
         );
     })
 }
