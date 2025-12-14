@@ -1,3 +1,4 @@
+use crate::eval::Environment;
 use rustyline::error::ReadlineError;
 
 mod ast;
@@ -19,7 +20,16 @@ fn main() {
                 return;
             }
         };
-        println!("{program}");
+        let eval = match Environment::default().eval_program(program) {
+            Ok(eval) => eval,
+            Err(errors) => {
+                for error in errors {
+                    error.report(&contents);
+                }
+                return;
+            }
+        };
+        println!("{eval}");
         return;
     }
 
@@ -27,14 +37,13 @@ fn main() {
     println!("Ctrl-D to exit");
     let mut rl = rustyline::DefaultEditor::new().unwrap();
 
+    let mut env = Environment::default();
+
     loop {
         match rl.readline(">> ") {
             Ok(line) => {
                 let _ = rl.add_history_entry(&line);
-                let (debug, line) = match line.trim().strip_prefix('?') {
-                    Some(line) => (true, line),
-                    None => (false, line.as_str()),
-                };
+                let line = line.leak().trim();
                 let program = match parser::parse(line) {
                     Ok(program) => program,
                     Err(errors) => {
@@ -44,11 +53,16 @@ fn main() {
                         continue;
                     }
                 };
-                if debug {
-                    println!("{program:#?}");
-                } else {
-                    println!("{program}");
-                }
+                let eval = match env.eval_program(program) {
+                    Ok(eval) => eval,
+                    Err(errors) => {
+                        for error in errors {
+                            error.report(line);
+                        }
+                        continue;
+                    }
+                };
+                println!("{eval}");
             }
             Err(ReadlineError::Interrupted) => {}
             Err(ReadlineError::Eof) => {
