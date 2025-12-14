@@ -44,6 +44,14 @@ impl<'a> Iterator for Lexer<'a> {
             self.read_char();
         }
 
+        if self.char? == '#' {
+            self.read_char();
+            while self.char.is_some_and(|c| c != '\n') {
+                self.read_char();
+            }
+            self.read_char();
+        }
+
         let start = self.pos;
 
         let kind = match self.char? {
