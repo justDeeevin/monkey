@@ -41,7 +41,7 @@ impl Node for Program<'_> {
     }
 }
 
-#[derive(strum::EnumDiscriminants, Debug)]
+#[derive(strum::EnumDiscriminants, Debug, Clone)]
 #[strum_discriminants(name(StatementKind))]
 pub enum Statement<'a> {
     Let(Let<'a>),
@@ -71,7 +71,7 @@ impl Node for Statement<'_> {
     }
 }
 
-#[derive(strum::EnumDiscriminants, Debug)]
+#[derive(strum::EnumDiscriminants, Debug, Clone)]
 #[strum_discriminants(name(ExpressionKind))]
 pub enum Expression<'a> {
     Identifier(Identifier<'a>),
@@ -116,7 +116,7 @@ impl Node for Expression<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Call<'a> {
     pub function: Box<Expression<'a>>,
     pub arguments: Vec<Expression<'a>>,
@@ -146,7 +146,7 @@ impl Node for Call<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Function<'a> {
     pub fn_token: Token<'a>,
     pub parameters: Vec<Identifier<'a>>,
@@ -176,7 +176,7 @@ impl Node for Function<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct If<'a> {
     pub if_token: Token<'a>,
     pub condition: Box<Expression<'a>>,
@@ -184,7 +184,7 @@ pub struct If<'a> {
     pub alternative: Option<BlockStatement<'a>>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct BlockStatement<'a> {
     pub open: Token<'a>,
     pub statements: Vec<Statement<'a>>,
@@ -235,7 +235,7 @@ impl Node for If<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Boolean<'a> {
     pub token: Token<'a>,
     pub value: bool,
@@ -253,14 +253,14 @@ impl Node for Boolean<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Infix<'a> {
     pub left: Box<Expression<'a>>,
     pub operator: InfixOperator,
     pub right: Box<Expression<'a>>,
 }
 
-#[derive(strum::Display, PartialEq, Eq, Debug)]
+#[derive(strum::Display, PartialEq, Eq, Debug, Clone, Copy)]
 pub enum InfixOperator {
     #[strum(serialize = "+")]
     Add,
@@ -295,7 +295,7 @@ impl Node for Infix<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Prefix<'a> {
     pub op_token: Token<'a>,
     pub operator: PrefixOperator,
@@ -303,7 +303,7 @@ pub struct Prefix<'a> {
     pub operand: Box<Expression<'a>>,
 }
 
-#[derive(strum::Display, PartialEq, Eq, Debug)]
+#[derive(strum::Display, PartialEq, Eq, Debug, Clone, Copy)]
 pub enum PrefixOperator {
     #[strum(serialize = "!")]
     Not,
@@ -327,7 +327,7 @@ impl Node for Prefix<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Integer<'a> {
     pub token: Token<'a>,
     pub value: i64,
@@ -345,7 +345,7 @@ impl Node for Integer<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Let<'a> {
     pub let_token: Token<'a>,
     pub name: Identifier<'a>,
@@ -371,11 +371,19 @@ impl Node for Let<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Identifier<'a> {
     pub token: Token<'a>,
     pub value: &'a str,
 }
+
+impl PartialEq for Identifier<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.value == other.value
+    }
+}
+
+impl Eq for Identifier<'_> {}
 
 impl Display for Identifier<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -389,7 +397,7 @@ impl Node for Identifier<'_> {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Return<'a> {
     pub return_token: Token<'a>,
     pub value: Expression<'a>,

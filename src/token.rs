@@ -3,7 +3,7 @@ use crate::{
     parser::{self, Parser},
 };
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Token<'a> {
     pub kind: TokenKind,
     pub literal: &'a str,

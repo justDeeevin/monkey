@@ -1,6 +1,6 @@
 use crate::{ast::*, parser::parse};
 
-fn get_program(input: &str) -> Program<'_> {
+pub fn get_program(input: &str) -> Program<'_> {
     parse(input).unwrap_or_else(|errors| {
         panic!(
             "failed to parse program:{}",

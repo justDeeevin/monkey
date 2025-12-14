@@ -5,7 +5,7 @@ use crate::{
 };
 
 #[cfg(test)]
-mod test;
+pub mod test;
 
 #[derive(thiserror::Error, Debug)]
 #[error("{kind}")]
