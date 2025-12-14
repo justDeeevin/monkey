@@ -31,12 +31,12 @@ impl Error {
 
 #[derive(thiserror::Error, Debug)]
 pub enum ErrorKind {
-    #[error("Unexpected token. Expected {expected}, found {}.", found.map(|k| k.to_string()).unwrap_or_else(|| "end of input".to_string()))]
+    #[error("Unexpected token. Expected {expected}, found {}", found.map(|k| k.to_string()).unwrap_or_else(|| "end of input".to_string()))]
     Unexpected {
         expected: StdString,
         found: Option<TokenKind>,
     },
-    #[error("Failed to parse integer literal.")]
+    #[error("Failed to parse integer literal")]
     ParseInt(
         #[from]
         #[source]
