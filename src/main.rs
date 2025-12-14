@@ -20,16 +20,12 @@ fn main() {
                 return;
             }
         };
-        let eval = match Environment::default().eval_program(program) {
-            Ok(eval) => eval,
-            Err(errors) => {
-                for error in errors {
-                    error.report(&contents);
-                }
-                return;
+        if let Err(errors) = Environment::default().eval_program(program) {
+            for error in errors {
+                error.report(&contents);
             }
+            return;
         };
-        println!("{eval}");
         return;
     }
 
