@@ -59,8 +59,8 @@ pub enum Statement<'a> {
 impl Display for Statement<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Let { name, value, .. } => write!(f, "let {name} = {value};"),
-            Self::Return { value, .. } => write!(f, "return {value};"),
+            Self::Let { name, value, .. } => write!(f, "let {name} = {value}"),
+            Self::Return { value, .. } => write!(f, "return {value}"),
             Self::Expression(e) => Display::fmt(e, f),
         }?;
 
