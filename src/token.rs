@@ -32,6 +32,7 @@ pub enum TokenKind {
 
     Comma,
     Semicolon,
+    Colon,
 
     LParen,
     RParen,
@@ -72,6 +73,7 @@ impl std::fmt::Display for TokenKind {
 
             Self::Comma => "`,`",
             Self::Semicolon => "`;`",
+            Self::Colon => "`:`",
 
             Self::LParen => "`(`",
             Self::RParen => "`)`",
@@ -108,6 +110,7 @@ impl TokenKind {
             Self::Null => Some(Parser::parse_null),
             Self::String => Some(Parser::parse_string),
             Self::LBracket => Some(Parser::parse_array),
+            Self::LBrace => Some(Parser::parse_map),
             _ => None,
         }
     }

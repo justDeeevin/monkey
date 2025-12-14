@@ -199,7 +199,7 @@ impl<'a> Parser<'a> {
     fn parse_index(&mut self, array: Expression<'a>) -> Result<'a, Expression<'a>> {
         let index = self.parse_expression(None, ExpressionKind::Base)?;
         Ok(Expression::Index {
-            array: Box::new(array),
+            collection: Box::new(array),
             index: Box::new(index),
             close: self.expect_next(TokenKind::RBracket)?,
         })
@@ -442,6 +442,37 @@ impl<'a> Parser<'a> {
             open,
             elements,
             close: self.expect_next(TokenKind::RBracket)?,
+        })
+    }
+
+    pub fn parse_map(&mut self, open: Token<'a>) -> Result<'a, Expression<'a>> {
+        let mut elements = Vec::new();
+        if self.peek_is(TokenKind::RBrace) {
+            return Ok(Expression::Map {
+                open,
+                elements,
+                close: self.expect_next(TokenKind::RBrace)?,
+            });
+        }
+
+        let key = self.parse_expression(None, ExpressionKind::Base)?;
+        self.expect_next(TokenKind::Colon)?;
+        let value = self.parse_expression(None, ExpressionKind::Base)?;
+
+        elements.push((key, value));
+
+        while self.peek_is(TokenKind::Comma) {
+            self.next_token();
+            let key = self.parse_expression(None, ExpressionKind::Base)?;
+            self.expect_next(TokenKind::Colon)?;
+            let value = self.parse_expression(None, ExpressionKind::Base)?;
+            elements.push((key, value));
+        }
+
+        Ok(Expression::Map {
+            open,
+            elements,
+            close: self.expect_next(TokenKind::RBrace)?,
         })
     }
 

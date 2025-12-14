@@ -84,6 +84,7 @@ impl<'a> Iterator for Lexer<'a> {
             }
             '[' => TokenKind::LBracket,
             ']' => TokenKind::RBracket,
+            ':' => TokenKind::Colon,
             c if c.is_alphabetic() || c == '_' => {
                 while self
                     .peek_char()

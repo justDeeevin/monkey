@@ -1,7 +1,7 @@
 use crate::{
     ast::*,
     eval::intrinsic::lookup_intrinsic,
-    object::{Function as FunctionObject, Object, ObjectKind},
+    object::{Function as FunctionObject, Map, Object, ObjectKind},
     token::Span,
 };
 use std::{collections::HashMap, rc::Rc};
@@ -49,12 +49,14 @@ pub enum ErrorKind<'a> {
     NotAFunction,
     #[error("Expected {expected} arguments, got {got}")]
     WrongNumberOfArguments { expected: usize, got: usize },
-    #[error("Cannot index into a non-array")]
-    NotAnArray,
+    #[error("Cannot index into a non-collection")]
+    NotACollection,
     #[error("Cannot index an array with a non-integer")]
     NotAnIndex,
     #[error("Out of bounds: index was {i} but length was {len}")]
     OutOfBounds { i: i64, len: usize },
+    #[error("{0} cannot be used as a map key")]
+    InvalidKey(ObjectKind),
 }
 
 pub type Result<'a, T, E = Vec<Error<'a>>> = std::result::Result<T, E>;
@@ -279,34 +281,63 @@ impl<'a> Environment<'a> {
                     .map(|e| self.eval_expression(e, None))
                     .collect::<Result<'a, Vec<_>>>()?,
             )),
-            Expression::Index { array, index, .. } => {
-                let Object::Array(mut array) = self.eval_expression(*array, None)? else {
-                    return Err(vec![Error {
-                        span,
-                        kind: ErrorKind::NotAnArray,
-                    }]);
-                };
+            Expression::Index {
+                collection, index, ..
+            } => match self.eval_expression(*collection, None)? {
+                Object::Array(mut array) => {
+                    let span = index.span();
 
-                let span = index.span();
+                    let Object::Integer(index) = self.eval_expression(*index, None)? else {
+                        return Err(vec![Error {
+                            span,
+                            kind: ErrorKind::NotAnIndex,
+                        }]);
+                    };
 
-                let Object::Integer(index) = self.eval_expression(*index, None)? else {
-                    return Err(vec![Error {
-                        span,
-                        kind: ErrorKind::NotAnIndex,
-                    }]);
-                };
+                    if index < 0 || index >= array.len() as i64 {
+                        return Err(vec![Error {
+                            span,
+                            kind: ErrorKind::OutOfBounds {
+                                i: index,
+                                len: array.len(),
+                            },
+                        }]);
+                    }
 
-                if index < 0 || index >= array.len() as i64 {
-                    return Err(vec![Error {
-                        span,
-                        kind: ErrorKind::OutOfBounds {
-                            i: index,
-                            len: array.len(),
-                        },
-                    }]);
+                    Ok(array.remove(index as usize))
+                }
+                Object::Map(map) => {
+                    let index = self.eval_expression(*index, None)?;
+                    if matches!(index, Object::Function { .. } | Object::Map(_)) {
+                        Err(vec![Error {
+                            span,
+                            kind: ErrorKind::InvalidKey(index.into()),
+                        }])
+                    } else {
+                        Ok(map.get(&index).cloned().unwrap_or(Object::Null))
+                    }
+                }
+                _ => Err(vec![Error {
+                    span,
+                    kind: ErrorKind::NotACollection,
+                }]),
+            },
+            Expression::Map { elements, .. } => {
+                let mut map = Map::default();
+
+                for (key, value) in elements {
+                    let key_span = key.span();
+                    let key = self.eval_expression(key, None)?;
+                    if matches!(key, Object::Function { .. } | Object::Map(_)) {
+                        return Err(vec![Error {
+                            span: key_span,
+                            kind: ErrorKind::InvalidKey(key.into()),
+                        }]);
+                    }
+                    map.insert(key, self.eval_expression(value, None)?);
                 }
 
-                Ok(array.remove(index as usize))
+                Ok(Object::Map(map))
             }
         }
     }

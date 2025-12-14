@@ -139,8 +139,13 @@ pub enum Expression<'a> {
         close: Token<'a>,
     },
     Index {
-        array: Box<Self>,
+        collection: Box<Self>,
         index: Box<Self>,
+        close: Token<'a>,
+    },
+    Map {
+        open: Token<'a>,
+        elements: Vec<(Expression<'a>, Expression<'a>)>,
         close: Token<'a>,
     },
 }
@@ -214,7 +219,22 @@ impl Display for Expression<'_> {
                 }
                 write!(f, "]")
             }
-            Self::Index { array, index, .. } => write!(f, "{array}[{index}]"),
+            Self::Index {
+                collection: array,
+                index,
+                ..
+            } => write!(f, "{array}[{index}]"),
+            Self::Map { elements, .. } => {
+                write!(f, "{{")?;
+                if !elements.is_empty() {
+                    for (key, value) in elements.iter().take(elements.len() - 1) {
+                        write!(f, "{key}: {value}, ")?;
+                    }
+                    let (key, value) = elements.last().unwrap();
+                    write!(f, "{key}: {value}",)?;
+                }
+                write!(f, "}}")
+            }
         }?;
         write!(f, ")")
     }
@@ -264,8 +284,16 @@ impl Node for Expression<'_> {
                 start: open.span.start,
                 end: close.span.end,
             },
-            Self::Index { array, close, .. } => Span {
+            Self::Index {
+                collection: array,
+                close,
+                ..
+            } => Span {
                 start: array.span().start,
+                end: close.span.end,
+            },
+            Self::Map { open, close, .. } => Span {
+                start: open.span.start,
                 end: close.span.end,
             },
         }

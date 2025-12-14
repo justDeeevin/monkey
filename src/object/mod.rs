@@ -2,11 +2,11 @@ use crate::{
     ast::{BlockStatement, Identifier},
     eval::Environment,
 };
-use std::rc::Rc;
+use std::{collections::HashMap, rc::Rc};
 
 #[derive(strum::EnumDiscriminants)]
 #[strum_discriminants(name(ObjectKind), derive(strum::Display))]
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum Object<'a> {
     Integer(i64),
     Boolean(bool),
@@ -16,6 +16,30 @@ pub enum Object<'a> {
     String(String),
     Null,
     Array(Vec<Self>),
+    Map(Map<'a>),
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct Map<'a>(pub HashMap<Object<'a>, Object<'a>>);
+
+impl<'a> std::ops::Deref for Map<'a> {
+    type Target = HashMap<Object<'a>, Object<'a>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl std::ops::DerefMut for Map<'_> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.0
+    }
+}
+
+impl std::hash::Hash for Map<'_> {
+    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
+        unreachable!()
+    }
 }
 
 #[derive(Debug)]
@@ -33,6 +57,12 @@ impl PartialEq for Function<'_> {
 }
 
 impl Eq for Function<'_> {}
+
+impl std::hash::Hash for Function<'_> {
+    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
+        unreachable!()
+    }
+}
 
 impl Object<'_> {
     pub fn truthy(&self) -> bool {
@@ -63,6 +93,17 @@ impl std::fmt::Display for Object<'_> {
                     write!(f, "{}", a.last().unwrap())?;
                 }
                 write!(f, "]")
+            }
+            Self::Map(m) => {
+                write!(f, "{{")?;
+                if !m.is_empty() {
+                    for (key, value) in m.iter().take(m.len() - 1) {
+                        write!(f, "{key}: {value}, ")?;
+                    }
+                    let (key, value) = m.iter().last().unwrap();
+                    write!(f, "{key}: {value}")?;
+                }
+                write!(f, "}}")
             }
         }
     }
