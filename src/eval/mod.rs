@@ -76,25 +76,27 @@ impl<'a> Environment<'a> {
         self.eval_statements(program.statements)
     }
 
-    fn eval_statements(&mut self, mut statements: Vec<Statement<'a>>) -> Result<'a, Object<'a>> {
+    fn eval_statements(&mut self, statements: Vec<Statement<'a>>) -> Result<'a, Object<'a>> {
         if statements.is_empty() {
             return Ok(Object::Null);
         }
 
         let mut errors = Vec::new();
+        let mut last = Object::Null;
 
-        for statement in statements.drain(..statements.len() - 1) {
+        for statement in statements {
             match self.eval_statement(statement) {
                 Ok(Object::Return(value)) => return Ok(*value),
-                Ok(_) => {}
-                Err(e) => errors.push(e),
+                Ok(out) => last = out,
+                Err(e) => errors.extend(e),
             }
         }
 
-        self.eval_statement(statements.pop().unwrap()).map_err(|e| {
-            errors.push(e);
-            errors.into_iter().flatten().collect()
-        })
+        if !errors.is_empty() {
+            Err(errors)
+        } else {
+            Ok(last)
+        }
     }
 
     fn eval_statement(&mut self, statement: Statement<'a>) -> Result<'a, Object<'a>> {
