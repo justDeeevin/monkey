@@ -47,7 +47,7 @@ pub enum ErrorKind<'a> {
     UndefinedVariable(&'a str),
     #[error("Cannot call a non-function")]
     NotAFunction,
-    #[error("Expected {expected} arguments, got {got}")]
+    #[error("Expected {expected} argument{}, got {got}", if *expected > 1 { "s" } else { "" })]
     WrongNumberOfArguments { expected: usize, got: usize },
     #[error("Cannot index into a non-collection")]
     NotACollection,
@@ -57,6 +57,10 @@ pub enum ErrorKind<'a> {
     OutOfBounds { i: i64, len: usize },
     #[error("{0} cannot be used as a map key")]
     InvalidKey(ObjectKind),
+    #[error("Length greater than i64::MAX")]
+    TooLongForLen,
+    #[error("Cannot get length of {0}")]
+    BadTypeForLen(ObjectKind),
 }
 
 pub type Result<'a, T, E = Vec<Error<'a>>> = std::result::Result<T, E>;
@@ -226,6 +230,10 @@ impl<'a> Environment<'a> {
                 arguments,
                 close,
             } => {
+                let args_span = Span {
+                    start: open.span.start,
+                    end: close.span.end,
+                };
                 if let Expression::Identifier(Identifier { value, .. }) = *function
                     && let Some(intrinsic) = lookup_intrinsic(value)
                 {
@@ -234,6 +242,7 @@ impl<'a> Environment<'a> {
                             .into_iter()
                             .map(|a| self.eval_expression(a, None))
                             .collect::<Result<'a, Vec<_>>>()?,
+                        args_span,
                     );
                 }
 
