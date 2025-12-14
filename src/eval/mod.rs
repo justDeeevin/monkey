@@ -1,11 +1,12 @@
-use std::{collections::HashMap, rc::Rc};
-
 use crate::{
     ast::*,
+    eval::intrinsic::lookup_intrinsic,
     object::{Function as FunctionObject, Object, ObjectKind},
     token::Span,
 };
+use std::{collections::HashMap, rc::Rc};
 
+mod intrinsic;
 #[cfg(test)]
 mod test;
 
@@ -232,6 +233,18 @@ impl<'a> Environment<'a> {
                     start: function.span().start,
                     end: close.span.end,
                 };
+
+                if let Expression::Identifier(Identifier { value, .. }) = *function
+                    && let Some(intrinsic) = lookup_intrinsic(value)
+                {
+                    return intrinsic(
+                        &arguments
+                            .into_iter()
+                            .map(|a| self.eval_expression(a, None))
+                            .collect::<Result<'a, Vec<_>>>()?,
+                    );
+                }
+
                 let Object::Function(function) = self.eval_expression(*function, None)? else {
                     return Err(vec![Error {
                         span,
