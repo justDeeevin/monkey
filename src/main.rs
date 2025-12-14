@@ -1,15 +1,25 @@
-use crate::eval::Environment;
+use std::rc::Rc;
+
+use cli::Backend;
+use compiler::Compiler;
+use eval::Environment;
 use rustyline::error::ReadlineError;
+use vm::VM;
 
 mod ast;
+mod cli;
+mod code;
+mod compiler;
 mod eval;
 mod lexer;
 mod object;
 mod parser;
 mod token;
+mod vm;
 
 fn main() {
-    if let Some(file) = std::env::args().nth(1) {
+    let args = cli::parse();
+    if let Some(file) = args.file {
         let contents = std::fs::read_to_string(file).unwrap();
         let program = match parser::parse(&contents) {
             Ok(program) => program,
@@ -20,12 +30,22 @@ fn main() {
                 return;
             }
         };
-        if let Err(errors) = Environment::default().eval_program(program) {
-            for error in errors {
-                error.report(&contents);
+        match args.backend {
+            Backend::Otf => {
+                if let Err(errors) = Environment::default().eval_program(program) {
+                    for error in errors {
+                        error.report(&contents);
+                    }
+                };
             }
-            return;
-        };
+            Backend::Vm => {
+                if let Err(errors) = VM::new(Compiler::compile(program)).run() {
+                    for error in errors {
+                        error.report(&contents);
+                    }
+                }
+            }
+        }
         return;
     }
 
@@ -49,14 +69,25 @@ fn main() {
                         continue;
                     }
                 };
-                let eval = match env.eval_program(program) {
-                    Ok(eval) => eval,
-                    Err(errors) => {
-                        for error in errors {
-                            error.report(line);
+                let eval = match args.backend {
+                    Backend::Otf => match env.eval_program(program) {
+                        Ok(eval) => Rc::new(eval),
+                        Err(errors) => {
+                            for error in errors {
+                                error.report(line);
+                            }
+                            continue;
                         }
-                        continue;
-                    }
+                    },
+                    Backend::Vm => match VM::new(Compiler::compile(program)).run() {
+                        Ok(eval) => eval,
+                        Err(errors) => {
+                            for error in errors {
+                                error.report(line);
+                            }
+                            continue;
+                        }
+                    },
                 };
                 println!("{eval}");
             }

@@ -14,6 +14,8 @@ pub enum Object<'a> {
     Return(Box<Self>),
     Function(Rc<Function<'a>>),
     String(String),
+    // Null could instead be represented as `Option::<Object<'a>>::None`, but that would require
+    // the added `Option` tag. This saves space.
     Null,
     Array(Vec<Self>),
     Map(Map<'a>),

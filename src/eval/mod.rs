@@ -13,8 +13,8 @@ mod test;
 #[derive(thiserror::Error, Debug)]
 #[error("{kind}")]
 pub struct Error<'a> {
-    span: Span,
-    kind: ErrorKind<'a>,
+    pub span: Span,
+    pub kind: ErrorKind<'a>,
 }
 
 impl Error<'_> {
