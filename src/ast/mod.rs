@@ -118,6 +118,7 @@ impl Node for Expression<'_> {
 
 #[derive(Debug, Clone)]
 pub struct Call<'a> {
+    pub open: Token<'a>,
     pub function: Box<Expression<'a>>,
     pub arguments: Vec<Expression<'a>>,
     pub close: Token<'a>,

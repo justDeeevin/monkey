@@ -188,7 +188,7 @@ impl<'a> Parser<'a> {
             self.next_token();
 
             if peek.kind == TokenKind::LParen {
-                left = self.parse_call(left)?;
+                left = self.parse_call(left, peek)?;
             } else {
                 left = self.parse_infix(peek, left)?;
             }
@@ -197,9 +197,14 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
-    fn parse_call(&mut self, function: Expression<'a>) -> Result<'a, Expression<'a>> {
+    fn parse_call(
+        &mut self,
+        function: Expression<'a>,
+        open: Token<'a>,
+    ) -> Result<'a, Expression<'a>> {
         let arguments = self.parse_call_arguments()?;
         Ok(Expression::Call(Call {
+            open,
             function: Box::new(function),
             arguments,
             close: self.expect_next(TokenKind::RParen)?,

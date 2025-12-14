@@ -46,6 +46,8 @@ pub enum ErrorKind<'a> {
     UndefinedVariable(&'a str),
     #[error("Cannot call a non-function")]
     NotAFunction,
+    #[error("Expected {expected} arguments, got {got}")]
+    WrongNumberOfArguments { expected: usize, got: usize },
 }
 
 pub type Result<'a, T, E = Vec<Error<'a>>> = std::result::Result<T, E>;
@@ -221,6 +223,7 @@ impl<'a> Environment<'a> {
                 },
             }))),
             Expression::Call(Call {
+                open,
                 function,
                 arguments,
                 close,
@@ -235,6 +238,19 @@ impl<'a> Environment<'a> {
                         kind: ErrorKind::NotAFunction,
                     }]);
                 };
+
+                if arguments.len() != function.parameters.len() {
+                    return Err(vec![Error {
+                        span: Span {
+                            start: open.span.start,
+                            end: close.span.end,
+                        },
+                        kind: ErrorKind::WrongNumberOfArguments {
+                            expected: function.parameters.len(),
+                            got: arguments.len(),
+                        },
+                    }]);
+                }
 
                 let mut call_env = function.env.clone();
                 for (argument, param) in arguments
