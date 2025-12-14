@@ -114,18 +114,17 @@ impl<'a> Parser<'a> {
     }
 
     fn parse_statement(&mut self) -> Result<'a, Statement<'a>, Error> {
-        let error = |found| Error {
-            span: Span {
-                start: self.lexer.input.len(),
-                end: self.lexer.input.len(),
-            },
-            kind: ErrorKind::Unexpected {
-                expected: "statement".to_string(),
-                found,
-            },
-        };
         let Some(token) = self.current.take() else {
-            return Err(error(None));
+            return Err(Error {
+                span: Span {
+                    start: self.lexer.input.len(),
+                    end: self.lexer.input.len(),
+                },
+                kind: ErrorKind::Unexpected {
+                    expected: "statement".to_string(),
+                    found: None,
+                },
+            });
         };
 
         let out = match token.kind {
