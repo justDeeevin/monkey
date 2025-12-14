@@ -53,7 +53,7 @@ impl std::fmt::Display for Object<'_> {
                 }
                 write!(f, ">")
             }
-            Self::String(s) => write!(f, "\"{s}\""),
+            Self::String(s) => s.fmt(f),
         }
     }
 }
