@@ -253,14 +253,14 @@ impl<'a> Parser<'a> {
         self.expect_next(TokenKind::Assign)?;
         Ok(Let {
             value: self.parse_expression(None, ExpressionKind::Base)?,
-            token,
+            let_token: token,
             name,
         })
     }
 
     fn parse_return_statement(&mut self, token: Token<'a>) -> Result<'a, Return<'a>> {
         Ok(Return {
-            token,
+            return_token: token,
             value: self.parse_expression(None, ExpressionKind::Base)?,
         })
     }
@@ -294,7 +294,7 @@ impl<'a> Parser<'a> {
                 _ => unreachable!(),
             },
             operand: Box::new(self.parse_expression(None, ExpressionKind::Prefix)?),
-            token,
+            op_token: token,
         }))
     }
 
@@ -319,7 +319,6 @@ impl<'a> Parser<'a> {
                 _ => unreachable!(),
             },
             right: Box::new(right),
-            token,
         }))
     }
 
@@ -360,7 +359,7 @@ impl<'a> Parser<'a> {
         }
 
         Ok(Expression::If(If {
-            token,
+            if_token: token,
             condition: Box::new(condition),
             consequence,
             alternative,
@@ -392,7 +391,7 @@ impl<'a> Parser<'a> {
         let lbrace = self.expect_next(TokenKind::LBrace)?;
         let body = self.parse_block_statement(lbrace)?;
         Ok(Expression::Function(Function {
-            token,
+            fn_token: token,
             parameters,
             body,
         }))

@@ -4,7 +4,7 @@ use crate::{ast::*, token::*};
 fn display() {
     let program = Program {
         statements: vec![Statement::Let(Let {
-            token: Token {
+            let_token: Token {
                 kind: TokenKind::Let,
                 literal: "let",
                 span: (0..3).into(),

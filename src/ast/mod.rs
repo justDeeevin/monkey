@@ -148,7 +148,7 @@ impl Node for Call<'_> {
 
 #[derive(Debug)]
 pub struct Function<'a> {
-    pub token: Token<'a>,
+    pub fn_token: Token<'a>,
     pub parameters: Vec<Identifier<'a>>,
     pub body: BlockStatement<'a>,
 }
@@ -170,7 +170,7 @@ impl Display for Function<'_> {
 impl Node for Function<'_> {
     fn span(&self) -> Span {
         Span {
-            start: self.token.span.start,
+            start: self.fn_token.span.start,
             end: self.body.span().end,
         }
     }
@@ -178,7 +178,7 @@ impl Node for Function<'_> {
 
 #[derive(Debug)]
 pub struct If<'a> {
-    pub token: Token<'a>,
+    pub if_token: Token<'a>,
     pub condition: Box<Expression<'a>>,
     pub consequence: BlockStatement<'a>,
     pub alternative: Option<BlockStatement<'a>>,
@@ -225,7 +225,7 @@ impl Display for If<'_> {
 impl Node for If<'_> {
     fn span(&self) -> Span {
         Span {
-            start: self.token.span.start,
+            start: self.if_token.span.start,
             end: self
                 .alternative
                 .as_ref()
@@ -255,7 +255,6 @@ impl Node for Boolean<'_> {
 
 #[derive(Debug)]
 pub struct Infix<'a> {
-    pub token: Token<'a>,
     pub left: Box<Expression<'a>>,
     pub operator: InfixOperator,
     pub right: Box<Expression<'a>>,
@@ -298,7 +297,7 @@ impl Node for Infix<'_> {
 
 #[derive(Debug)]
 pub struct Prefix<'a> {
-    pub token: Token<'a>,
+    pub op_token: Token<'a>,
     pub operator: PrefixOperator,
     // Boxed for indirection :<
     pub operand: Box<Expression<'a>>,
@@ -322,7 +321,7 @@ impl Display for Prefix<'_> {
 impl Node for Prefix<'_> {
     fn span(&self) -> Span {
         Span {
-            start: self.token.span.start,
+            start: self.op_token.span.start,
             end: self.operand.span().end,
         }
     }
@@ -348,7 +347,7 @@ impl Node for Integer<'_> {
 
 #[derive(Debug)]
 pub struct Let<'a> {
-    pub token: Token<'a>,
+    pub let_token: Token<'a>,
     pub name: Identifier<'a>,
     pub value: Expression<'a>,
 }
@@ -358,7 +357,7 @@ impl Display for Let<'_> {
         write!(
             f,
             "{} {} = {}",
-            self.token.literal, self.name.value, self.value
+            self.let_token.literal, self.name.value, self.value
         )
     }
 }
@@ -366,7 +365,7 @@ impl Display for Let<'_> {
 impl Node for Let<'_> {
     fn span(&self) -> Span {
         Span {
-            start: self.token.span.start,
+            start: self.let_token.span.start,
             end: self.value.span().end,
         }
     }
@@ -392,7 +391,7 @@ impl Node for Identifier<'_> {
 
 #[derive(Debug)]
 pub struct Return<'a> {
-    pub token: Token<'a>,
+    pub return_token: Token<'a>,
     pub value: Expression<'a>,
 }
 
@@ -405,7 +404,7 @@ impl Display for Return<'_> {
 impl Node for Return<'_> {
     fn span(&self) -> Span {
         Span {
-            start: self.token.span.start,
+            start: self.return_token.span.start,
             end: self.value.span().end,
         }
     }
