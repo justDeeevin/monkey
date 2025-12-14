@@ -200,17 +200,14 @@ impl<'a> Environment<'a> {
                     Ok(Object::Null)
                 }
             }
-            Expression::Identifier(Identifier { value, token }) => self
-                .values
-                .get(value)
-                .cloned()
-                .or_else(|| self.outer.as_ref()?.values.get(value).cloned())
-                .ok_or_else(|| {
+            Expression::Identifier(Identifier { value, token }) => {
+                self.find_variable(value).ok_or_else(|| {
                     vec![Error {
                         span: token.span,
                         kind: ErrorKind::UndefinedVariable(value),
                     }]
-                }),
+                })
+            }
             Expression::Function(Function {
                 parameters, body, ..
             }) => Ok(Object::Function(Rc::new(FunctionObject {
@@ -278,5 +275,12 @@ impl<'a> Environment<'a> {
         };
 
         env.eval_statements(block.statements)
+    }
+
+    fn find_variable(&self, name: &'a str) -> Option<Object<'a>> {
+        self.values
+            .get(name)
+            .cloned()
+            .or_else(|| self.outer.as_ref()?.find_variable(name))
     }
 }
