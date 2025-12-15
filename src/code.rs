@@ -21,6 +21,7 @@ pub enum Op {
     JumpIfNot(usize),
     Jump(usize),
     Panic,
+    Null(Span),
 }
 
 impl PartialEq for Op {

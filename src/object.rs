@@ -2,7 +2,7 @@ use crate::{
     ast::{BlockStatement, Identifier},
     eval::Environment,
 };
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, rc::Rc, sync::LazyLock};
 
 #[derive(strum::EnumDiscriminants)]
 #[strum_discriminants(name(ObjectKind), derive(strum::Display))]
@@ -20,6 +20,33 @@ pub enum Object<'a> {
     Array(Vec<Self>),
     Map(Map<'a>),
 }
+
+pub struct StaticObject<'a>(Rc<Object<'a>>);
+
+impl<'a> std::ops::Deref for StaticObject<'a> {
+    type Target = Rc<Object<'a>>;
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+impl StaticObject<'static> {
+    pub fn new(object: Object<'static>) -> Self {
+        Self(Rc::new(object))
+    }
+}
+
+// SAFETY: this program is purely single-threaded
+unsafe impl Sync for StaticObject<'_> {}
+unsafe impl Send for StaticObject<'_> {}
+
+pub static FALSE: LazyLock<StaticObject<'static>> =
+    LazyLock::new(|| StaticObject::new(Object::Boolean(false)));
+pub static TRUE: LazyLock<StaticObject<'static>> =
+    LazyLock::new(|| StaticObject::new(Object::Boolean(true)));
+pub static NULL: LazyLock<StaticObject<'static>> =
+    LazyLock::new(|| StaticObject::new(Object::Null));
 
 impl From<i64> for Object<'_> {
     fn from(i: i64) -> Self {

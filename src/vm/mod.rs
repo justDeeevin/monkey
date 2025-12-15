@@ -2,7 +2,7 @@ use crate::{
     ast::{InfixOperator, PrefixOperator},
     code::{Op, Program, SpannedObject},
     eval::{Error as EvalError, ErrorKind},
-    object::Object,
+    object::{FALSE, NULL, Object, TRUE},
     token::Span,
 };
 use std::{mem::MaybeUninit, rc::Rc};
@@ -137,10 +137,12 @@ impl<'input> VM<'input> {
                 Op::Not(span) => {
                     let span = *span;
                     let value = self.pop()?;
-                    self.stack.push(SpannedObject {
-                        object: Rc::new((!value.object.truthy()).into()),
-                        span,
-                    })
+                    let object = if value.object.truthy() {
+                        FALSE.clone()
+                    } else {
+                        TRUE.clone()
+                    };
+                    self.stack.push(SpannedObject { object, span })
                 }
                 Op::JumpIfNot(index) => {
                     let index = *index;
@@ -155,6 +157,10 @@ impl<'input> VM<'input> {
                 Op::Panic => {
                     panic!("Panicked! Why?");
                 }
+                Op::Null(span) => self.stack.push(SpannedObject {
+                    object: NULL.clone(),
+                    span: *span,
+                }),
             }
 
             i += 1;

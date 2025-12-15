@@ -111,6 +111,9 @@ impl<'a> Compiler<'a> {
                     self.ops[jin_pos] = Op::JumpIfNot(self.ops.len());
                 }
             }
+            Expression::Null(token) => {
+                self.ops.push(Op::Null(token.span));
+            }
             _ => todo!(),
         }
     }
