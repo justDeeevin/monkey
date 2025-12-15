@@ -16,6 +16,8 @@ pub enum Op {
     Eq,
     Neq,
     GT,
+    Neg(Span),
+    Not(Span),
 }
 
 impl PartialEq for Op {

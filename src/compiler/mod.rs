@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{Expression, InfixOperator, Program as Ast, Statement},
+    ast::{Expression, InfixOperator, Node, PrefixOperator, Program as Ast, Statement},
     code::{Op, Program, SpannedObject},
 };
 
@@ -44,6 +44,7 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_expression(&mut self, expr: Expression<'a>) {
+        let span = expr.span();
         match expr {
             Expression::Infix {
                 left,
@@ -71,6 +72,15 @@ impl<'a> Compiler<'a> {
                     Op::True(token.span)
                 } else {
                     Op::False(token.span)
+                });
+            }
+            Expression::Prefix {
+                operator, operand, ..
+            } => {
+                self.compile_expression(*operand);
+                self.ops.push(match operator {
+                    PrefixOperator::Not => Op::Not(span),
+                    PrefixOperator::Neg => Op::Neg(span),
                 });
             }
             _ => todo!(),

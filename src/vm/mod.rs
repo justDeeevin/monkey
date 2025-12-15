@@ -1,5 +1,5 @@
 use crate::{
-    ast::InfixOperator,
+    ast::{InfixOperator, PrefixOperator},
     code::{Op, Program, SpannedObject},
     eval::{Error as EvalError, ErrorKind},
     object::Object,
@@ -116,6 +116,32 @@ impl<'input> VM<'input> {
                     object: Rc::new(false.into()),
                     span: *span,
                 }),
+                Op::Neg(span) => {
+                    let span = *span;
+                    let value = self.pop()?;
+                    let Object::Integer(value) = value.object.as_ref() else {
+                        return Err(vec![Error::Eval(EvalError {
+                            span: value.span,
+                            kind: ErrorKind::InvalidOperand {
+                                operator: PrefixOperator::Neg,
+                                operand: value.object.as_ref().into(),
+                            },
+                        })]);
+                    };
+
+                    self.stack.push(SpannedObject {
+                        object: Rc::new((-value).into()),
+                        span,
+                    });
+                }
+                Op::Not(span) => {
+                    let span = *span;
+                    let value = self.pop()?;
+                    self.stack.push(SpannedObject {
+                        object: Rc::new((!value.object.truthy()).into()),
+                        span,
+                    })
+                }
             }
 
             i += 1;
