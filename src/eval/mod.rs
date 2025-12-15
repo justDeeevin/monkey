@@ -123,8 +123,8 @@ impl<'a> Environment<'a> {
     ) -> Result<'a, Object<'a>> {
         let span = expr.span();
         match expr {
-            Expression::Integer { value, .. } => Ok(Object::Integer(value)),
-            Expression::Boolean { value, .. } => Ok(Object::Boolean(value)),
+            Expression::Integer { value, .. } => Ok(value.into()),
+            Expression::Boolean { value, .. } => Ok(value.into()),
             Expression::Prefix {
                 operator, operand, ..
             } => match operator {
@@ -132,7 +132,7 @@ impl<'a> Environment<'a> {
                     !self.eval_expression(*operand, None)?.truthy(),
                 )),
                 PrefixOperator::Neg => match self.eval_expression(*operand, None)? {
-                    Object::Integer(i) => Ok(Object::Integer(-i)),
+                    Object::Integer(i) => Ok((-i).into()),
                     e => Err(vec![Error {
                         span,
                         kind: ErrorKind::InvalidOperand {
@@ -171,7 +171,7 @@ impl<'a> Environment<'a> {
                                 kind: ErrorKind::DivisionByZero,
                             }])
                         } else {
-                            Ok(Object::Integer(left / right))
+                            Ok((left / right).into())
                         }
                     }
                     (InfixOperator::LT, Object::Integer(left), Object::Integer(right)) => {

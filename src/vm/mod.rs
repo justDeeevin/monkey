@@ -111,7 +111,7 @@ impl<'input> VM<'input> {
                     match (left.object.as_ref(), right.object.as_ref()) {
                         (Object::Integer(left), Object::Integer(right)) => {
                             self.stack.push(SpannedObject {
-                                object: Rc::new(Object::Integer(left + right)),
+                                object: Rc::new((left + right).into()),
                                 span,
                             });
                         }

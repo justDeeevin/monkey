@@ -2,11 +2,7 @@ use crate::{compiler::test::get_program, object::Object, vm::VM};
 
 #[test]
 fn integer_arithmetic() {
-    let tests = [
-        ("1", Object::Integer(1)),
-        ("2", Object::Integer(2)),
-        ("1 + 2", Object::Integer(3)),
-    ];
+    let tests = [("1", 1.into()), ("2", 2.into()), ("1 + 2", 3.into())];
 
     check(&tests);
 }

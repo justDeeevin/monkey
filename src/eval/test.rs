@@ -21,7 +21,7 @@ fn integer() {
         .into_iter()
         .map(|(input, expected)| (test_eval(input), expected))
     {
-        assert_eq!(found, Object::Integer(expected));
+        assert_eq!(found, expected.into());
     }
 }
 

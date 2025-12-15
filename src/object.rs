@@ -21,6 +21,36 @@ pub enum Object<'a> {
     Map(Map<'a>),
 }
 
+impl From<i64> for Object<'_> {
+    fn from(i: i64) -> Self {
+        Self::Integer(i)
+    }
+}
+
+impl From<bool> for Object<'_> {
+    fn from(b: bool) -> Self {
+        Self::Boolean(b)
+    }
+}
+
+impl From<String> for Object<'_> {
+    fn from(s: String) -> Self {
+        Self::String(s)
+    }
+}
+
+impl<'a> From<Vec<Object<'a>>> for Object<'a> {
+    fn from(a: Vec<Object<'a>>) -> Self {
+        Self::Array(a)
+    }
+}
+
+impl<'a> From<HashMap<Object<'a>, Object<'a>>> for Object<'a> {
+    fn from(m: HashMap<Object<'a>, Object<'a>>) -> Self {
+        Self::Map(Map(m))
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Map<'a>(pub HashMap<Object<'a>, Object<'a>>);
 
