@@ -61,6 +61,8 @@ pub enum ErrorKind<'a> {
     TooLongForLen,
     #[error("Cannot get length of {0}")]
     BadTypeForLen(ObjectKind),
+    #[error("Attempted to divide by zero")]
+    DivisionByZero,
 }
 
 pub type Result<'a, T, E = Vec<Error<'a>>> = std::result::Result<T, E>;
@@ -163,7 +165,14 @@ impl<'a> Environment<'a> {
                         Ok(Object::Integer(left * right))
                     }
                     (InfixOperator::Div, Object::Integer(left), Object::Integer(right)) => {
-                        Ok(Object::Integer(left / right))
+                        if right == 0 {
+                            Err(vec![Error {
+                                span,
+                                kind: ErrorKind::DivisionByZero,
+                            }])
+                        } else {
+                            Ok(Object::Integer(left / right))
+                        }
                     }
                     (InfixOperator::LT, Object::Integer(left), Object::Integer(right)) => {
                         Ok(Object::Boolean(left < right))
