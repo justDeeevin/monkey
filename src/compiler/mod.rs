@@ -1,9 +1,8 @@
 use std::rc::Rc;
 
 use crate::{
-    ast::{Expression, Program as Ast, Statement},
+    ast::{Expression, InfixOperator, Program as Ast, Statement},
     code::{Op, Program, SpannedObject},
-    object::Object,
 };
 
 #[cfg(test)]
@@ -31,11 +30,15 @@ impl<'a> Compiler<'a> {
         for statement in statements {
             self.compile_statement(statement);
         }
+        self.ops.pop();
     }
 
     fn compile_statement(&mut self, statement: Statement<'a>) {
         match statement {
-            Statement::Expression(expr) => self.compile_expression(expr),
+            Statement::Expression(expr) => {
+                self.compile_expression(expr);
+                self.ops.push(Op::Pop)
+            }
             _ => todo!(),
         }
     }
@@ -44,19 +47,31 @@ impl<'a> Compiler<'a> {
         match expr {
             Expression::Infix {
                 left,
-                operator: _,
+                operator,
                 right,
             } => {
-                self.compile_expression(*left);
-                self.compile_expression(*right);
-                self.ops.push(Op::Add);
+                if operator == InfixOperator::LT {
+                    self.compile_expression(*right);
+                    self.compile_expression(*left);
+                } else {
+                    self.compile_expression(*left);
+                    self.compile_expression(*right);
+                }
+                self.ops.push(operator.into());
             }
             Expression::Integer { value, token } => {
                 self.constants.push(SpannedObject {
-                    object: Rc::new(Object::Integer(value)),
+                    object: Rc::new(value.into()),
                     span: token.span,
                 });
                 self.ops.push(Op::Constant(self.constants.len() - 1));
+            }
+            Expression::Boolean { value, token } => {
+                self.ops.push(if value {
+                    Op::True(token.span)
+                } else {
+                    Op::False(token.span)
+                });
             }
             _ => todo!(),
         }

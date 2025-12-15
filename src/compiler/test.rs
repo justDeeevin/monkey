@@ -25,13 +25,5 @@ fn check(cases: &[(&str, &[Object], &[Op])]) {
 }
 
 pub fn get_program(input: &str) -> Program<'_> {
-    let ast = get_ast(input);
-    Compiler::compile(ast).unwrap_or_else(|errors| {
-        panic!(
-            "failed to compile program:{}",
-            errors
-                .into_iter()
-                .fold(String::new(), |acc, e| format!("{acc}\n{e}"))
-        )
-    })
+    Compiler::compile(get_ast(input))
 }

@@ -1,6 +1,7 @@
 use crate::{
     ast::InfixOperator,
     code::{Op, Program, SpannedObject},
+    eval::{Error as EvalError, ErrorKind},
     object::Object,
     token::Span,
 };
@@ -101,38 +102,20 @@ impl<'input> VM<'input> {
                 Op::Constant(value) => {
                     self.stack.push(self.program.constants[*value].clone());
                 }
-                Op::Add => {
-                    let right = self.pop()?;
-                    let left = self.pop()?;
-                    let span = Span {
-                        start: left.span.start,
-                        end: right.span.end,
-                    };
-                    match (left.object.as_ref(), right.object.as_ref()) {
-                        (Object::Integer(left), Object::Integer(right)) => {
-                            self.stack.push(SpannedObject {
-                                object: Rc::new((left + right).into()),
-                                span,
-                            });
-                        }
-                        (Object::String(left), Object::String(right)) => {
-                            self.stack.push(SpannedObject {
-                                object: Rc::new(Object::String(left.clone() + right)),
-                                span,
-                            });
-                        }
-                        (left, right) => {
-                            return Err(vec![Error::Eval(crate::eval::Error {
-                                span,
-                                kind: crate::eval::ErrorKind::InvalidOperands {
-                                    operator: InfixOperator::Add,
-                                    left: left.into(),
-                                    right: right.into(),
-                                },
-                            })]);
-                        }
-                    }
+                Op::Pop => {
+                    self.stack.pop();
                 }
+                Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Eq | Op::Neq | Op::GT => {
+                    self.execute_binary_op((*op).try_into().unwrap())?
+                }
+                Op::True(span) => self.stack.push(SpannedObject {
+                    object: Rc::new(true.into()),
+                    span: *span,
+                }),
+                Op::False(span) => self.stack.push(SpannedObject {
+                    object: Rc::new(false.into()),
+                    span: *span,
+                }),
             }
 
             i += 1;
@@ -145,7 +128,123 @@ impl<'input> VM<'input> {
             .unwrap_or(Rc::new(Object::Null)))
     }
 
+    fn execute_binary_op(&mut self, operator: InfixOperator) -> Result<'input, ()> {
+        let right = self.pop()?;
+        let left = self.pop()?;
+        let (span, operator) = if left.span.start > right.span.end {
+            (
+                Span {
+                    start: right.span.start,
+                    end: left.span.end,
+                },
+                InfixOperator::LT,
+            )
+        } else {
+            (
+                Span {
+                    start: left.span.start,
+                    end: right.span.end,
+                },
+                operator,
+            )
+        };
+        match (operator, left.object.as_ref(), right.object.as_ref()) {
+            (InfixOperator::Add, Object::Integer(left), Object::Integer(right)) => {
+                self.stack.push(SpannedObject {
+                    object: Rc::new((left + right).into()),
+                    span,
+                });
+            }
+            (InfixOperator::Add, Object::String(left), Object::String(right)) => {
+                self.stack.push(SpannedObject {
+                    object: Rc::new(Object::String(left.clone() + right)),
+                    span,
+                });
+            }
+            (InfixOperator::Sub, Object::Integer(left), Object::Integer(right)) => {
+                self.stack.push(SpannedObject {
+                    object: Rc::new((left - right).into()),
+                    span,
+                });
+            }
+            (InfixOperator::Mul, Object::Integer(left), Object::Integer(right)) => {
+                self.stack.push(SpannedObject {
+                    object: Rc::new((left * right).into()),
+                    span,
+                });
+            }
+            (InfixOperator::Div, Object::Integer(left), Object::Integer(right)) => {
+                if *right == 0 {
+                    return Err(vec![Error::Eval(EvalError {
+                        span,
+                        kind: ErrorKind::DivisionByZero,
+                    })]);
+                }
+
+                self.stack.push(SpannedObject {
+                    object: Rc::new((left / right).into()),
+                    span,
+                });
+            }
+            (InfixOperator::Eq, left, right)
+                if !matches!(&left, Object::Function { .. })
+                    && !matches!(&right, Object::Function { .. }) =>
+            {
+                self.stack.push(SpannedObject {
+                    object: Rc::new((left == right).into()),
+                    span,
+                });
+            }
+            (InfixOperator::Neq, left, right)
+                if !matches!(&left, Object::Function { .. })
+                    && !matches!(&right, Object::Function { .. }) =>
+            {
+                self.stack.push(SpannedObject {
+                    object: Rc::new((left != right).into()),
+                    span,
+                });
+            }
+            (
+                InfixOperator::GT | InfixOperator::LT,
+                Object::Integer(left),
+                Object::Integer(right),
+            ) => {
+                self.stack.push(SpannedObject {
+                    object: Rc::new((left > right).into()),
+                    span,
+                });
+            }
+            _ => {
+                return invalid_operands(
+                    operator,
+                    left.object.as_ref(),
+                    right.object.as_ref(),
+                    span,
+                )
+                .map(|_| ());
+            }
+        }
+
+        Ok(())
+    }
+
     fn pop(&mut self) -> Result<'input, SpannedObject<'input>> {
         self.stack.pop().ok_or(vec![Error::Underflow])
     }
+}
+
+fn invalid_operands<'a>(
+    operator: InfixOperator,
+    left: &Object<'a>,
+    right: &Object<'a>,
+    span: Span,
+) -> Result<'a, Rc<Object<'a>>> {
+    Err(vec![Error::Eval(EvalError {
+        span,
+        kind: ErrorKind::InvalidOperands {
+            operator,
+            left: left.into(),
+            right: right.into(),
+        },
+    })])
 }
