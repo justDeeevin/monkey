@@ -142,6 +142,19 @@ impl<'input> VM<'input> {
                         span,
                     })
                 }
+                Op::JumpIfNot(index) => {
+                    let index = *index;
+                    let value = self.pop()?;
+                    if !value.object.truthy() {
+                        i = index - 1;
+                    }
+                }
+                Op::Jump(index) => {
+                    i = *index - 1;
+                }
+                Op::Panic => {
+                    panic!("Panicked! Why?");
+                }
             }
 
             i += 1;

@@ -27,10 +27,13 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_statements(&mut self, statements: Vec<Statement<'a>>) {
+        let empty = statements.is_empty();
         for statement in statements {
             self.compile_statement(statement);
         }
-        self.ops.pop();
+        if !empty {
+            self.ops.pop();
+        }
     }
 
     fn compile_statement(&mut self, statement: Statement<'a>) {
@@ -82,6 +85,31 @@ impl<'a> Compiler<'a> {
                     PrefixOperator::Not => Op::Not(span),
                     PrefixOperator::Neg => Op::Neg(span),
                 });
+            }
+            Expression::If {
+                condition,
+                consequence,
+                alternative,
+                ..
+            } => {
+                self.compile_expression(*condition);
+
+                self.ops.push(Op::Panic);
+                let jin_pos = self.ops.len() - 1;
+
+                self.compile_statements(consequence.statements);
+
+                if let Some(alternative) = alternative {
+                    self.ops.push(Op::Panic);
+                    let jump_pos = self.ops.len() - 1;
+
+                    self.ops[jin_pos] = Op::JumpIfNot(self.ops.len());
+
+                    self.compile_statements(alternative.statements);
+                    self.ops[jump_pos] = Op::Jump(self.ops.len());
+                } else {
+                    self.ops[jin_pos] = Op::JumpIfNot(self.ops.len());
+                }
             }
             _ => todo!(),
         }

@@ -18,6 +18,9 @@ pub enum Op {
     GT,
     Neg(Span),
     Not(Span),
+    JumpIfNot(usize),
+    Jump(usize),
+    Panic,
 }
 
 impl PartialEq for Op {
