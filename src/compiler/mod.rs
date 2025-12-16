@@ -161,6 +161,16 @@ impl<'a> Compiler<'a> {
                     span: open.span.join(close.span),
                 })
             }
+            Expression::Index {
+                collection,
+                index,
+                close,
+            } => {
+                let span = collection.span().join(close.span);
+                self.compile_expression(*collection);
+                self.compile_expression(*index);
+                self.ops.push(Op::Index(span));
+            }
             _ => todo!(),
         }
     }

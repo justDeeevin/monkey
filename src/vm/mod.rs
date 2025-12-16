@@ -154,6 +154,53 @@ impl<'input> VM<'input> {
                         span: *span,
                     });
                 }
+                Op::Index(span) => {
+                    let span = *span;
+                    let index = self.pop()?;
+                    let collection = self.pop()?;
+                    let object = match collection.object {
+                        Object::Array(mut array) => {
+                            let index_span = index.span;
+
+                            let Object::Integer(index) = index.object else {
+                                return Err(vec![Error::Eval(EvalError {
+                                    span: index_span,
+                                    kind: ErrorKind::NotAnIndex,
+                                })]);
+                            };
+
+                            if index < 0 || index >= array.len() as i64 {
+                                return Err(vec![Error::Eval(EvalError {
+                                    span: index_span,
+                                    kind: ErrorKind::OutOfBounds {
+                                        i: index,
+                                        len: array.len(),
+                                    },
+                                })]);
+                            }
+
+                            array.remove(index as usize)
+                        }
+                        Object::Map(mut map) => {
+                            if matches!(index.object, Object::Function { .. } | Object::Map(_)) {
+                                return Err(vec![Error::Eval(EvalError {
+                                    span: index.span,
+                                    kind: ErrorKind::InvalidKey(index.object.into()),
+                                })]);
+                            }
+
+                            map.remove(&index.object).unwrap_or(Object::Null)
+                        }
+                        _ => {
+                            return Err(vec![Error::Eval(EvalError {
+                                span: collection.span,
+                                kind: ErrorKind::NotACollection,
+                            })]);
+                        }
+                    };
+
+                    self.stack.push(SpannedObject { span, object });
+                }
             }
 
             i += 1;

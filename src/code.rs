@@ -35,6 +35,7 @@ pub enum Op<'a> {
         size: usize,
         span: Span,
     },
+    Index(Span),
 }
 
 impl PartialEq for Op<'_> {
