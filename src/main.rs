@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use cli::Backend;
 use compiler::Compiler;
 use eval::Environment;
@@ -71,7 +69,7 @@ fn main() {
                 };
                 let eval = match args.backend {
                     Backend::Otf => match env.eval_program(program) {
-                        Ok(eval) => Rc::new(eval),
+                        Ok(eval) => eval,
                         Err(errors) => {
                             for error in errors {
                                 error.report(line);

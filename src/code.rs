@@ -65,19 +65,19 @@ impl TryFrom<Op> for InfixOperator {
 
 #[derive(Debug, Clone)]
 pub struct SpannedObject<'a> {
-    pub object: Rc<Object<'a>>,
+    pub object: Object<'a>,
     pub span: Span,
 }
 
 impl PartialEq for SpannedObject<'_> {
     fn eq(&self, other: &Self) -> bool {
-        self.object == other.object
+        self.object.eq(&other.object)
     }
 }
 
 impl PartialEq<Object<'_>> for SpannedObject<'_> {
     fn eq(&self, other: &Object<'_>) -> bool {
-        self.object.as_ref() == other
+        self.object.eq(other)
     }
 }
 

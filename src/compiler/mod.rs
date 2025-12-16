@@ -1,5 +1,3 @@
-use std::rc::Rc;
-
 use crate::{
     ast::{Expression, InfixOperator, Node, PrefixOperator, Program as Ast, Statement},
     code::{Op, Program, SpannedObject},
@@ -65,7 +63,7 @@ impl<'a> Compiler<'a> {
             }
             Expression::Integer { value, token } => {
                 self.constants.push(SpannedObject {
-                    object: Rc::new(value.into()),
+                    object: value.into(),
                     span: token.span,
                 });
                 self.ops.push(Op::Constant(self.constants.len() - 1));

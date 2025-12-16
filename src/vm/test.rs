@@ -18,7 +18,7 @@ fn check(cases: &[(&str, Object)]) {
                         .fold(String::new(), |acc, e| format!("{acc}\n{e}"))
                 );
             }
-            Ok(out) => assert_eq!(out.as_ref(), expected),
+            Ok(out) => assert_eq!(out, *expected),
         }
     }
 }
