@@ -13,6 +13,7 @@ mod cli;
 mod code;
 mod compiler;
 mod eval;
+mod intrinsic;
 mod lexer;
 mod object;
 mod parser;

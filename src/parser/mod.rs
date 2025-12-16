@@ -254,7 +254,7 @@ impl<'a> Parser<'a> {
 
     fn parse_let_statement(&mut self, token: Token<'a>) -> Result<Statement<'a>> {
         let name_token = self.expect_next(TokenKind::Ident)?;
-        if crate::eval::intrinsic::lookup_intrinsic(name_token.literal).is_some() {
+        if crate::intrinsic::lookup_intrinsic(name_token.literal).is_some() {
             return Err(Error {
                 span: name_token.span,
                 kind: ErrorKind::Reserved(name_token.literal.to_string()),

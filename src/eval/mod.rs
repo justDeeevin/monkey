@@ -1,12 +1,11 @@
 use crate::{
     ast::*,
-    eval::intrinsic::lookup_intrinsic,
+    intrinsic::lookup_intrinsic,
     object::{Function as FunctionObject, Map, Object, ObjectKind},
     token::Span,
 };
 use std::{collections::HashMap, rc::Rc};
 
-pub mod intrinsic;
 #[cfg(test)]
 mod test;
 
@@ -63,6 +62,8 @@ pub enum ErrorKind<'a> {
     BadTypeForLen(ObjectKind),
     #[error("Attempted to divide by zero")]
     DivisionByZero,
+    #[error("Value is not an array")]
+    NotAnArray,
 }
 
 pub type Result<'a, T, E = Error<'a>> = std::result::Result<T, E>;
