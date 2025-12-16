@@ -138,6 +138,15 @@ pub struct Span {
     pub end: usize,
 }
 
+impl Span {
+    pub fn join(self, other: Self) -> Self {
+        Self {
+            start: self.start.min(other.start),
+            end: self.end.max(other.end),
+        }
+    }
+}
+
 impl<T: std::ops::RangeBounds<usize>> From<T> for Span {
     fn from(value: T) -> Self {
         let start = match value.start_bound() {

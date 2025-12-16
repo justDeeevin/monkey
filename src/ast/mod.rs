@@ -25,19 +25,11 @@ impl Display for Program<'_> {
 
 impl Node for Program<'_> {
     fn span(&self) -> Span {
-        let start = self
-            .statements
+        self.statements
             .first()
-            .map(|s| s.span().start)
-            .unwrap_or_default();
-
-        let end = self
-            .statements
-            .last()
-            .map(|s| s.span().end)
-            .unwrap_or_default();
-
-        Span { start, end }
+            .map(|s| s.span())
+            .unwrap_or_default()
+            .join(self.statements.last().map(|s| s.span()).unwrap_or_default())
     }
 }
 
@@ -73,17 +65,11 @@ impl Node for Statement<'_> {
         match self {
             Self::Let {
                 let_token, value, ..
-            } => Span {
-                start: let_token.span.start,
-                end: value.span().end,
-            },
+            } => let_token.span.join(value.span()),
             Self::Return {
                 return_token,
                 value,
-            } => Span {
-                start: return_token.span.start,
-                end: value.span().end,
-            },
+            } => return_token.span.join(value.span()),
             Self::Expression(e) => e.span(),
         }
     }
@@ -247,55 +233,33 @@ impl Node for Expression<'_> {
             Self::Integer { token, .. } => token.span,
             Self::Prefix {
                 op_token, operand, ..
-            } => Span {
-                start: op_token.span.start,
-                end: operand.span().end,
-            },
-            Self::Infix { left, right, .. } => Span {
-                start: left.span().start,
-                end: right.span().end,
-            },
+            } => op_token.span.join(operand.span()),
+            Self::Infix { left, right, .. } => left.span().join(right.span()),
             Self::Boolean { token, .. } => token.span,
             Self::If {
                 if_token,
                 consequence,
                 alternative,
                 ..
-            } => Span {
-                start: if_token.span.start,
-                end: alternative
+            } => if_token.span.join(
+                alternative
                     .as_ref()
-                    .map(|s| s.span().end)
-                    .unwrap_or(consequence.span().end),
-            },
-            Self::Function { fn_token, body, .. } => Span {
-                start: fn_token.span.start,
-                end: body.span().end,
-            },
+                    .map(|s| s.span())
+                    .unwrap_or(consequence.span()),
+            ),
+            Self::Function { fn_token, body, .. } => fn_token.span.join(body.span()),
             Self::Call {
                 function, close, ..
-            } => Span {
-                start: function.span().start,
-                end: close.span.end,
-            },
+            } => function.span().join(close.span),
             Self::Null(null) => null.span,
             Self::String { token, .. } => token.span,
-            Self::Array { open, close, .. } => Span {
-                start: open.span.start,
-                end: close.span.end,
-            },
+            Self::Array { open, close, .. } => open.span.join(close.span),
             Self::Index {
                 collection: array,
                 close,
                 ..
-            } => Span {
-                start: array.span().start,
-                end: close.span.end,
-            },
-            Self::Map { open, close, .. } => Span {
-                start: open.span.start,
-                end: close.span.end,
-            },
+            } => array.span().join(close.span),
+            Self::Map { open, close, .. } => open.span.join(close.span),
         }
     }
 }
@@ -319,10 +283,7 @@ impl Display for BlockStatement<'_> {
 
 impl Node for BlockStatement<'_> {
     fn span(&self) -> Span {
-        Span {
-            start: self.open.span.start,
-            end: self.close.span.end,
-        }
+        self.open.span.join(self.close.span)
     }
 }
 

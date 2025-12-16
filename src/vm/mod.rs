@@ -142,22 +142,11 @@ impl<'input> VM<'input> {
     fn execute_binary_op(&mut self, operator: InfixOperator) -> Result<'input, ()> {
         let right = self.pop()?;
         let left = self.pop()?;
-        let (span, operator) = if left.span.start > right.span.end {
-            (
-                Span {
-                    start: right.span.start,
-                    end: left.span.end,
-                },
-                InfixOperator::LT,
-            )
+        let span = left.span.join(right.span);
+        let operator = if left.span.start > right.span.end {
+            InfixOperator::LT
         } else {
-            (
-                Span {
-                    start: left.span.start,
-                    end: right.span.end,
-                },
-                operator,
-            )
+            operator
         };
         match (operator, left.object, right.object) {
             (InfixOperator::Add, Object::Integer(left), Object::Integer(right)) => {

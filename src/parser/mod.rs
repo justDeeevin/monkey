@@ -75,10 +75,10 @@ impl<'a> Parser<'a> {
         match self.next_token().take() {
             Some(token) if token.kind == expected => Ok(token),
             found => Err(Error {
-                span: Span {
-                    start: found.as_ref().map(|t| t.span.start).unwrap_or(input.len()),
-                    end: found.as_ref().map(|t| t.span.end).unwrap_or(input.len()),
-                },
+                span: found.as_ref().map(|t| t.span).unwrap_or(Span {
+                    start: input.len(),
+                    end: input.len(),
+                }),
                 kind: ErrorKind::Unexpected {
                     expected: expected.to_string(),
                     found: found.as_ref().map(|t| t.kind),

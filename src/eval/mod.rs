@@ -241,10 +241,7 @@ impl<'a> Environment<'a> {
                 arguments,
                 close,
             } => {
-                let args_span = Span {
-                    start: open.span.start,
-                    end: close.span.end,
-                };
+                let args_span = open.span.join(close.span);
                 if let Expression::Identifier(Identifier { value, .. }) = *function
                     && let Some(intrinsic) = lookup_intrinsic(value)
                 {
@@ -266,10 +263,7 @@ impl<'a> Environment<'a> {
 
                 if arguments.len() != function.parameters.len() {
                     return Err(vec![Error {
-                        span: Span {
-                            start: open.span.start,
-                            end: close.span.end,
-                        },
+                        span: args_span,
                         kind: ErrorKind::WrongNumberOfArguments {
                             expected: function.parameters.len(),
                             got: arguments.len(),
