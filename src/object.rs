@@ -71,9 +71,9 @@ impl<'a> FromIterator<(Object<'a>, Object<'a>)> for Object<'a> {
     }
 }
 
-impl<'a> From<Vec<Op<'a>>> for Object<'a> {
-    fn from(value: Vec<Op<'a>>) -> Self {
-        Self::CompiledFunction(Rc::new(CompiledFunction { ops: value.into() }))
+impl<'a> From<CompiledFunction<'a>> for Object<'a> {
+    fn from(value: CompiledFunction<'a>) -> Self {
+        Self::CompiledFunction(Rc::new(value))
     }
 }
 
@@ -125,6 +125,7 @@ impl Hash for Function<'_> {
 #[derive(Debug)]
 pub struct CompiledFunction<'a> {
     pub ops: Rc<[Op<'a>]>,
+    pub params: Rc<[&'a str]>,
 }
 
 impl PartialEq for CompiledFunction<'_> {
@@ -138,12 +139,6 @@ impl Eq for CompiledFunction<'_> {}
 impl Hash for CompiledFunction<'_> {
     fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
         unreachable!()
-    }
-}
-
-impl<'a> From<Rc<[Op<'a>]>> for CompiledFunction<'a> {
-    fn from(value: Rc<[Op<'a>]>) -> Self {
-        Self { ops: value }
     }
 }
 

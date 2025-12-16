@@ -36,7 +36,10 @@ pub enum Op<'a> {
         span: Span,
     },
     Index(Span),
-    Call(Span),
+    Call {
+        call_span: Span,
+        args_span: Span,
+    },
     ReturnValue,
     Return,
 }

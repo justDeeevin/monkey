@@ -3,7 +3,7 @@ use crate::{
         Expression, InfixOperator, Node, PrefixOperator, Program as Ast, Statement, StatementKind,
     },
     code::{Op, Program, SpannedObject},
-    object::Object,
+    object::{CompiledFunction, Object},
     token::Span,
 };
 
@@ -203,19 +203,38 @@ impl<'a> Compiler<'a> {
                 self.compile_expression(*index);
                 self.current_scope().ops.push(Op::Index(span));
             }
-            Expression::Function { body, fn_token, .. } => {
+            Expression::Function {
+                body,
+                fn_token,
+                parameters,
+            } => {
                 self.enter_scope();
                 let span = fn_token.span.join(body.span());
                 self.compile_statements(body.statements);
                 let ops = self.leave_scope();
-                self.add_constant(ops, span);
+                self.add_constant(
+                    CompiledFunction {
+                        ops: ops.into(),
+                        params: parameters.into_iter().map(|p| p.value).collect(),
+                    },
+                    span,
+                );
             }
             Expression::Call {
-                function, close, ..
+                function,
+                close,
+                arguments,
+                open,
             } => {
                 let span = function.span().join(close.span);
+                for argument in arguments {
+                    self.compile_expression(argument);
+                }
                 self.compile_expression(*function);
-                self.current_scope().ops.push(Op::Call(span));
+                self.current_scope().ops.push(Op::Call {
+                    call_span: span,
+                    args_span: open.span.join(close.span),
+                });
             }
         }
     }

@@ -2,7 +2,7 @@ use crate::{
     ast::{InfixOperator, PrefixOperator},
     code::{Op, Program, SpannedObject},
     eval::{Error as EvalError, ErrorKind},
-    object::Object,
+    object::{CompiledFunction, Object},
     token::Span,
 };
 use frame::Frame;
@@ -50,7 +50,13 @@ impl<'input> VM<'input> {
     pub fn new(program: Program<'input>) -> Self {
         Self {
             stack: Stack::default(),
-            frames: vec![Frame::new(Rc::new(program.ops.into()), Span::default())],
+            frames: vec![Frame::new(
+                Rc::new(CompiledFunction {
+                    ops: program.ops,
+                    params: Rc::new([]),
+                }),
+                Span::default(),
+            )],
             constants: program.constants,
         }
     }
@@ -61,6 +67,10 @@ impl<'input> VM<'input> {
 
     fn current_frame_mut(&mut self) -> &mut Frame<'input> {
         self.frames.last_mut().unwrap()
+    }
+
+    fn bind(&mut self, name: &'input str, value: SpannedObject<'input>) {
+        self.current_frame_mut().locals.insert(name, value);
     }
 
     pub fn run(&mut self) -> Result<'input, Object<'input>> {
@@ -130,7 +140,7 @@ impl<'input> VM<'input> {
                 }),
                 Op::Bind(name) => {
                     let value = self.pop()?;
-                    self.current_frame_mut().locals.insert(name, value);
+                    self.bind(name, value);
                 }
                 Op::Get { name, span } => {
                     let Some(value) = self.current_frame().locals.get(name) else {
@@ -210,7 +220,10 @@ impl<'input> VM<'input> {
 
                     self.stack.push(SpannedObject { span, object });
                 }
-                Op::Call(span) => {
+                Op::Call {
+                    call_span,
+                    args_span,
+                } => {
                     let function = self.pop()?;
                     let Object::CompiledFunction(function) = function.object else {
                         return Err(vec![Error::Eval(EvalError {
@@ -218,7 +231,21 @@ impl<'input> VM<'input> {
                             kind: ErrorKind::NotAFunction,
                         })]);
                     };
-                    self.frames.push(Frame::new(function, span));
+                    let params = function.params.clone();
+                    let args = self.stack.drain(params.len()).collect::<Vec<_>>();
+                    if args.len() != params.len() {
+                        return Err(vec![Error::Eval(EvalError {
+                            span: args_span,
+                            kind: ErrorKind::WrongNumberOfArguments {
+                                expected: params.len(),
+                                got: args.len(),
+                            },
+                        })]);
+                    }
+                    self.frames.push(Frame::new(function, call_span));
+                    for (param, value) in params.iter().rev().zip(args) {
+                        self.bind(param, value);
+                    }
                     continue;
                 }
                 Op::ReturnValue => {
