@@ -3,26 +3,54 @@ use crate::{
         Expression, InfixOperator, Node, PrefixOperator, Program as Ast, Statement, StatementKind,
     },
     code::{Op, Program, SpannedObject},
+    object::Object,
+    token::Span,
 };
 
 #[cfg(test)]
 pub mod test;
 
 #[derive(Default)]
-pub struct Compiler<'a> {
-    constants: Vec<SpannedObject<'a>>,
+struct Scope<'a> {
     ops: Vec<Op<'a>>,
 }
 
-impl<'a> Compiler<'a> {
-    pub fn compile(program: Ast<'a>) -> Program<'a> {
-        let mut compiler = Compiler::default();
+#[derive(Default)]
+pub struct Compiler<'a> {
+    constants: Vec<SpannedObject<'a>>,
+    scopes: Vec<Scope<'a>>,
+}
 
-        compiler.compile_statements(program.statements);
+impl<'a> Compiler<'a> {
+    fn current_scope(&mut self) -> &mut Scope<'a> {
+        self.scopes.last_mut().unwrap()
+    }
+
+    fn enter_scope(&mut self) {
+        self.scopes.push(Scope::default());
+    }
+
+    fn leave_scope(&mut self) -> Vec<Op<'a>> {
+        self.scopes.pop().unwrap().ops
+    }
+
+    fn add_constant(&mut self, value: impl Into<Object<'a>>, span: Span) {
+        self.constants.push(SpannedObject {
+            object: value.into(),
+            span,
+        });
+        let const_i = self.constants.len() - 1;
+        self.current_scope().ops.push(Op::Constant(const_i));
+    }
+
+    pub fn compile(&mut self, program: Ast<'a>) -> Program<'a> {
+        self.scopes.push(Scope::default());
+        self.compile_statements(program.statements);
+        self.current_scope().ops.pop();
 
         Program {
-            ops: compiler.ops.into(),
-            constants: compiler.constants.into(),
+            ops: self.scopes.pop().unwrap().ops.into(),
+            constants: self.constants.clone().into(),
         }
     }
 
@@ -31,9 +59,17 @@ impl<'a> Compiler<'a> {
         for statement in statements {
             last_kind = Some(StatementKind::from(&statement));
             self.compile_statement(statement);
+            if last_kind == Some(StatementKind::Return) {
+                break;
+            }
         }
-        if last_kind != Some(StatementKind::Let) {
-            self.ops.pop();
+        if last_kind == Some(StatementKind::Expression) {
+            self.current_scope().ops.pop();
+        }
+        if last_kind.is_none_or(|k| k == StatementKind::Let) {
+            self.current_scope().ops.push(Op::Return);
+        } else {
+            self.current_scope().ops.push(Op::ReturnValue);
         }
     }
 
@@ -41,13 +77,15 @@ impl<'a> Compiler<'a> {
         match statement {
             Statement::Expression(expr) => {
                 self.compile_expression(expr);
-                self.ops.push(Op::Pop)
+                self.current_scope().ops.push(Op::Pop)
             }
             Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
-                self.ops.push(Op::SetGlobal(name.value));
+                self.current_scope().ops.push(Op::SetGlobal(name.value));
             }
-            _ => todo!(),
+            Statement::Return { value, .. } => {
+                self.compile_expression(value);
+            }
         }
     }
 
@@ -66,17 +104,13 @@ impl<'a> Compiler<'a> {
                     self.compile_expression(*left);
                     self.compile_expression(*right);
                 }
-                self.ops.push(operator.into());
+                self.current_scope().ops.push(operator.into());
             }
             Expression::Integer { value, token } => {
-                self.constants.push(SpannedObject {
-                    object: value.into(),
-                    span: token.span,
-                });
-                self.ops.push(Op::Constant(self.constants.len() - 1));
+                self.add_constant(value, token.span);
             }
             Expression::Boolean { value, token } => {
-                self.ops.push(if value {
+                self.current_scope().ops.push(if value {
                     Op::True(token.span)
                 } else {
                     Op::False(token.span)
@@ -86,7 +120,7 @@ impl<'a> Compiler<'a> {
                 operator, operand, ..
             } => {
                 self.compile_expression(*operand);
-                self.ops.push(match operator {
+                self.current_scope().ops.push(match operator {
                     PrefixOperator::Not => Op::Not(span),
                     PrefixOperator::Neg => Op::Neg(span),
                 });
@@ -99,38 +133,36 @@ impl<'a> Compiler<'a> {
             } => {
                 self.compile_expression(*condition);
 
-                self.ops.push(Op::Panic);
-                let jin_pos = self.ops.len() - 1;
+                self.current_scope().ops.push(Op::Panic);
+                let jin_pos = self.current_scope().ops.len() - 1;
 
                 self.compile_statements(consequence.statements);
 
                 if let Some(alternative) = alternative {
-                    self.ops.push(Op::Panic);
-                    let jump_pos = self.ops.len() - 1;
+                    self.current_scope().ops.push(Op::Panic);
+                    let jump_pos = self.current_scope().ops.len() - 1;
 
-                    self.ops[jin_pos] = Op::JumpIfNot(self.ops.len());
+                    self.current_scope().ops[jin_pos] =
+                        Op::JumpIfNot(self.current_scope().ops.len());
 
                     self.compile_statements(alternative.statements);
-                    self.ops[jump_pos] = Op::Jump(self.ops.len());
+                    self.current_scope().ops[jump_pos] = Op::Jump(self.current_scope().ops.len());
                 } else {
-                    self.ops[jin_pos] = Op::JumpIfNot(self.ops.len());
+                    self.current_scope().ops[jin_pos] =
+                        Op::JumpIfNot(self.current_scope().ops.len());
                 }
             }
             Expression::Null(token) => {
-                self.ops.push(Op::Null(token.span));
+                self.current_scope().ops.push(Op::Null(token.span));
             }
             Expression::Identifier(name) => {
-                self.ops.push(Op::GetGlobal {
+                self.current_scope().ops.push(Op::GetGlobal {
                     name: name.value,
                     span: name.span(),
                 });
             }
             Expression::String { value, token } => {
-                self.constants.push(SpannedObject {
-                    object: value.into(),
-                    span: token.span,
-                });
-                self.ops.push(Op::Constant(self.constants.len() - 1));
+                self.add_constant(value, token.span);
             }
             Expression::Array {
                 elements,
@@ -141,7 +173,7 @@ impl<'a> Compiler<'a> {
                 for element in elements.into_iter().rev() {
                     self.compile_expression(element);
                 }
-                self.ops.push(Op::Array {
+                self.current_scope().ops.push(Op::Array {
                     size,
                     span: open.span.join(close.span),
                 })
@@ -156,7 +188,7 @@ impl<'a> Compiler<'a> {
                     self.compile_expression(value);
                     self.compile_expression(key);
                 }
-                self.ops.push(Op::Map {
+                self.current_scope().ops.push(Op::Map {
                     size,
                     span: open.span.join(close.span),
                 })
@@ -169,9 +201,22 @@ impl<'a> Compiler<'a> {
                 let span = collection.span().join(close.span);
                 self.compile_expression(*collection);
                 self.compile_expression(*index);
-                self.ops.push(Op::Index(span));
+                self.current_scope().ops.push(Op::Index(span));
             }
-            _ => todo!(),
+            Expression::Function { body, fn_token, .. } => {
+                self.enter_scope();
+                let span = fn_token.span.join(body.span());
+                self.compile_statements(body.statements);
+                let ops = self.leave_scope();
+                self.add_constant(ops, span);
+            }
+            Expression::Call {
+                function, close, ..
+            } => {
+                let span = function.span().join(close.span);
+                self.compile_expression(*function);
+                self.current_scope().ops.push(Op::Call(span));
+            }
         }
     }
 }

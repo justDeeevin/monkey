@@ -1,8 +1,12 @@
+use std::rc::Rc;
+
 use cli::Backend;
 use compiler::Compiler;
 use eval::Environment;
 use rustyline::error::ReadlineError;
 use vm::VM;
+
+use crate::{object::Object, token::Span, vm::frame::Frame};
 
 mod ast;
 mod cli;
@@ -36,13 +40,15 @@ fn main() {
                     }
                 };
             }
-            Backend::Vm => {
-                if let Err(errors) = VM::new(Compiler::compile(program)).run() {
+            Backend::Vm => match VM::new(Compiler::default().compile(program)).run() {
+                Err(errors) => {
                     for error in errors {
                         error.report(&contents);
                     }
                 }
-            }
+                Ok(out) if out != Object::Null => println!("{out}"),
+                Ok(_) => {}
+            },
         }
         return;
     }
@@ -53,6 +59,7 @@ fn main() {
 
     let mut env = Environment::default();
     let mut vm = VM::default();
+    let mut compiler = Compiler::default();
 
     loop {
         match rl.readline(">> ") {
@@ -79,7 +86,10 @@ fn main() {
                         }
                     },
                     Backend::Vm => {
-                        vm.program = Compiler::compile(program);
+                        let program = compiler.compile(program);
+                        vm.frames
+                            .push(Frame::new(Rc::new(program.ops.into()), Span::default()));
+                        vm.constants = program.constants.clone();
                         match vm.run() {
                             Ok(eval) => eval,
                             Err(errors) => {

@@ -25,5 +25,5 @@ fn check(cases: &[(&str, &[Object], &[Op])]) {
 }
 
 pub fn get_program(input: &str) -> Program<'_> {
-    Compiler::compile(get_ast(input))
+    Compiler::default().compile(get_ast(input))
 }

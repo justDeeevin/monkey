@@ -36,6 +36,9 @@ pub enum Op<'a> {
         span: Span,
     },
     Index(Span),
+    Call(Span),
+    ReturnValue,
+    Return,
 }
 
 impl PartialEq for Op<'_> {
@@ -96,17 +99,6 @@ impl PartialEq<Object<'_>> for SpannedObject<'_> {
 }
 
 impl Eq for SpannedObject<'_> {}
-
-#[derive(Debug)]
-pub struct ScopedObject<'a> {
-    pub object: SpannedObject<'a>,
-    pub scope: Scope,
-}
-
-#[derive(Debug)]
-pub enum Scope {
-    Global,
-}
 
 #[derive(Debug, Default)]
 pub struct Program<'a> {

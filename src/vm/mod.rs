@@ -1,14 +1,16 @@
 use crate::{
     ast::{InfixOperator, PrefixOperator},
-    code::{Op, Program, Scope, ScopedObject, SpannedObject},
+    code::{Op, Program, SpannedObject},
     eval::{Error as EvalError, ErrorKind},
     object::Object,
     token::Span,
 };
+use frame::Frame;
 use itertools::Itertools;
 use stack::Stack;
 use std::{collections::HashMap, rc::Rc};
 
+pub mod frame;
 mod stack;
 #[cfg(test)]
 mod test;
@@ -35,42 +37,55 @@ pub type Result<'a, T, E = Vec<Error<'a>>> = std::result::Result<T, E>;
 #[derive(Default)]
 pub struct VM<'input> {
     stack: Stack<SpannedObject<'input>>,
-    pub program: Program<'input>,
-    symbols: HashMap<&'input str, ScopedObject<'input>>,
+    pub frames: Vec<Frame<'input>>,
+    pub constants: Rc<[SpannedObject<'input>]>,
+    globals: HashMap<&'input str, SpannedObject<'input>>,
 }
 
 impl<'input> VM<'input> {
     pub fn new(program: Program<'input>) -> Self {
         Self {
             stack: Stack::default(),
-            program,
-            symbols: HashMap::new(),
+            frames: vec![Frame::new(Rc::new(program.ops.into()), Span::default())],
+            constants: program.constants,
+            globals: HashMap::new(),
         }
     }
 
+    fn current_frame(&self) -> &Frame<'input> {
+        self.frames.last().unwrap()
+    }
+
+    fn current_frame_mut(&mut self) -> &mut Frame<'input> {
+        self.frames.last_mut().unwrap()
+    }
+
     pub fn run(&mut self) -> Result<'input, Object<'input>> {
-        let mut i = 0;
-        while let Some(op) = self.program.ops.get(i) {
+        while let Some(op) = self
+            .current_frame()
+            .ops()
+            .get(self.current_frame().ip)
+            .copied()
+        {
             match op {
                 Op::Constant(value) => {
-                    self.stack.push(self.program.constants[*value].clone());
+                    self.stack.push(self.constants[value].clone());
                 }
                 Op::Pop => {
                     self.stack.pop();
                 }
                 Op::Add | Op::Sub | Op::Mul | Op::Div | Op::Eq | Op::Neq | Op::GT => {
-                    self.execute_binary_op((*op).try_into().unwrap())?
+                    self.execute_binary_op((op).try_into().unwrap())?
                 }
                 Op::True(span) => self.stack.push(SpannedObject {
                     object: Object::Boolean(true),
-                    span: *span,
+                    span,
                 }),
                 Op::False(span) => self.stack.push(SpannedObject {
                     object: Object::Boolean(false),
-                    span: *span,
+                    span,
                 }),
                 Op::Neg(span) => {
-                    let span = *span;
                     let value = self.pop()?;
                     let Object::Integer(value) = value.object else {
                         return Err(vec![Error::Eval(EvalError {
@@ -88,56 +103,44 @@ impl<'input> VM<'input> {
                     });
                 }
                 Op::Not(span) => {
-                    let span = *span;
                     let value = self.pop()?;
                     self.stack.push(SpannedObject {
-                        object: Object::Boolean(!value.object.truthy()),
+                        object: (!value.object.truthy()).into(),
                         span,
                     })
                 }
                 Op::JumpIfNot(index) => {
-                    let index = *index;
                     let value = self.pop()?;
                     if !value.object.truthy() {
-                        i = index - 1;
+                        self.current_frame_mut().ip = index - 1;
                     }
                 }
                 Op::Jump(index) => {
-                    i = *index - 1;
+                    self.current_frame_mut().ip = index - 1;
                 }
                 Op::Panic => {
                     panic!("Panicked! Why?");
                 }
                 Op::Null(span) => self.stack.push(SpannedObject {
                     object: Object::Null,
-                    span: *span,
+                    span,
                 }),
                 Op::SetGlobal(name) => {
-                    let name = *name;
                     let value = self.pop()?;
-                    self.symbols.insert(
-                        name,
-                        ScopedObject {
-                            object: value,
-                            scope: Scope::Global,
-                        },
-                    );
+                    self.globals.insert(name, value);
                 }
                 Op::GetGlobal { name, span } => {
-                    let Some(value) = self.symbols.get(name) else {
+                    let Some(value) = self.globals.get(name) else {
                         return Err(vec![Error::Eval(EvalError {
-                            span: *span,
+                            span,
                             kind: ErrorKind::UndefinedVariable(name),
                         })]);
                     };
-                    self.stack.push(value.object.clone());
+                    self.stack.push(value.clone());
                 }
                 Op::Array { size, span } => {
-                    let object = self.stack.drain(*size).map(|o| o.object).collect();
-                    self.stack.push(SpannedObject {
-                        object,
-                        span: *span,
-                    })
+                    let object = self.stack.drain(size).map(|o| o.object).collect();
+                    self.stack.push(SpannedObject { object, span })
                 }
                 Op::Map { size, span } => {
                     let map = self
@@ -146,16 +149,15 @@ impl<'input> VM<'input> {
                         .map(|o| o.object)
                         .tuples::<(_, _)>()
                         .collect::<HashMap<_, _>>();
-                    if map.len() != *size {
+                    if map.len() != size {
                         return Err(vec![Error::Underflow]);
                     }
                     self.stack.push(SpannedObject {
                         object: map.into(),
-                        span: *span,
+                        span,
                     });
                 }
                 Op::Index(span) => {
-                    let span = *span;
                     let index = self.pop()?;
                     let collection = self.pop()?;
                     let object = match collection.object {
@@ -182,7 +184,8 @@ impl<'input> VM<'input> {
                             array.remove(index as usize)
                         }
                         Object::Map(mut map) => {
-                            if matches!(index.object, Object::Function { .. } | Object::Map(_)) {
+                            if matches!(index.object, Object::CompiledFunction(_) | Object::Map(_))
+                            {
                                 return Err(vec![Error::Eval(EvalError {
                                     span: index.span,
                                     kind: ErrorKind::InvalidKey(index.object.into()),
@@ -201,9 +204,39 @@ impl<'input> VM<'input> {
 
                     self.stack.push(SpannedObject { span, object });
                 }
+                Op::Call(span) => {
+                    let function = self.pop()?;
+                    let Object::CompiledFunction(function) = function.object else {
+                        return Err(vec![Error::Eval(EvalError {
+                            span: function.span,
+                            kind: ErrorKind::NotAFunction,
+                        })]);
+                    };
+                    self.frames.push(Frame::new(function, span));
+                    continue;
+                }
+                Op::ReturnValue => {
+                    let value = self.pop()?.object;
+                    let Some(call_span) = self.frames.pop().map(|frame| frame.call_span) else {
+                        return Err(vec![Error::Underflow]);
+                    };
+                    self.stack.push(SpannedObject {
+                        span: call_span,
+                        object: value,
+                    });
+                }
+                Op::Return => {
+                    let Some(call_span) = self.frames.pop().map(|frame| frame.call_span) else {
+                        return Err(vec![Error::Underflow]);
+                    };
+                    self.stack.push(SpannedObject {
+                        object: Object::Null,
+                        span: call_span,
+                    });
+                }
             }
 
-            i += 1;
+            self.current_frame_mut().ip += 1;
         }
 
         Ok(self.stack.pop().map(|o| o.object).unwrap_or(Object::Null))
@@ -257,8 +290,8 @@ impl<'input> VM<'input> {
                 });
             }
             (InfixOperator::Eq, left, right)
-                if !matches!(&left, Object::Function { .. })
-                    && !matches!(&right, Object::Function { .. }) =>
+                if !matches!(&left, Object::CompiledFunction(_))
+                    && !matches!(&right, Object::CompiledFunction(_)) =>
             {
                 self.stack.push(SpannedObject {
                     object: (left == right).into(),
@@ -266,8 +299,8 @@ impl<'input> VM<'input> {
                 });
             }
             (InfixOperator::Neq, left, right)
-                if !matches!(&left, Object::Function { .. })
-                    && !matches!(&right, Object::Function { .. }) =>
+                if !matches!(&left, Object::CompiledFunction(_))
+                    && !matches!(&right, Object::CompiledFunction(_)) =>
             {
                 self.stack.push(SpannedObject {
                     object: (left != right).into(),

@@ -1,8 +1,9 @@
 use crate::{
     ast::{BlockStatement, Identifier},
+    code::Op,
     eval::Environment,
 };
-use std::{collections::HashMap, rc::Rc};
+use std::{collections::HashMap, hash::Hash, rc::Rc};
 
 #[derive(strum::EnumDiscriminants)]
 #[strum_discriminants(name(ObjectKind), derive(strum::Display))]
@@ -13,6 +14,7 @@ pub enum Object<'a> {
     #[strum_discriminants(strum(serialize = "Null"))]
     Return(Box<Self>),
     Function(Rc<Function<'a>>),
+    CompiledFunction(Rc<CompiledFunction<'a>>),
     String(String),
     // Null could instead be represented as `Option::<Object<'a>>::None`, but that would require
     // the added `Option` tag. This saves space.
@@ -69,6 +71,12 @@ impl<'a> FromIterator<(Object<'a>, Object<'a>)> for Object<'a> {
     }
 }
 
+impl<'a> From<Vec<Op<'a>>> for Object<'a> {
+    fn from(value: Vec<Op<'a>>) -> Self {
+        Self::CompiledFunction(Rc::new(CompiledFunction { ops: value.into() }))
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Map<'a>(pub HashMap<Object<'a>, Object<'a>>);
 
@@ -108,9 +116,34 @@ impl PartialEq for Function<'_> {
 
 impl Eq for Function<'_> {}
 
-impl std::hash::Hash for Function<'_> {
+impl Hash for Function<'_> {
     fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
         unreachable!()
+    }
+}
+
+#[derive(Debug)]
+pub struct CompiledFunction<'a> {
+    pub ops: Rc<[Op<'a>]>,
+}
+
+impl PartialEq for CompiledFunction<'_> {
+    fn eq(&self, _other: &Self) -> bool {
+        unreachable!()
+    }
+}
+
+impl Eq for CompiledFunction<'_> {}
+
+impl Hash for CompiledFunction<'_> {
+    fn hash<H: std::hash::Hasher>(&self, _state: &mut H) {
+        unreachable!()
+    }
+}
+
+impl<'a> From<Rc<[Op<'a>]>> for CompiledFunction<'a> {
+    fn from(value: Rc<[Op<'a>]>) -> Self {
+        Self { ops: value }
     }
 }
 
@@ -155,6 +188,7 @@ impl std::fmt::Display for Object<'_> {
                 }
                 write!(f, "}}")
             }
+            Self::CompiledFunction(fun) => f.debug_list().entries(fun.ops.as_ref()).finish(),
         }
     }
 }
