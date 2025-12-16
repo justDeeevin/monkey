@@ -133,9 +133,7 @@ impl<'a> Parser<'a> {
             _ => Statement::Expression(self.parse_expression_statement(token)?),
         };
 
-        if self.peek_is(TokenKind::Semicolon) {
-            self.next_token();
-        }
+        self.expect_next(TokenKind::Semicolon)?;
 
         Ok(out)
     }
