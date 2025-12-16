@@ -34,12 +34,16 @@ impl<'a> Error<'a> {
 
 pub type Result<'a, T, E = Vec<Error<'a>>> = std::result::Result<T, E>;
 
-#[derive(Default)]
 pub struct VM<'input> {
     stack: Stack<SpannedObject<'input>>,
     pub frames: Vec<Frame<'input>>,
     pub constants: Rc<[SpannedObject<'input>]>,
-    globals: HashMap<&'input str, SpannedObject<'input>>,
+}
+
+impl Default for VM<'_> {
+    fn default() -> Self {
+        Self::new(Program::default())
+    }
 }
 
 impl<'input> VM<'input> {
@@ -48,7 +52,6 @@ impl<'input> VM<'input> {
             stack: Stack::default(),
             frames: vec![Frame::new(Rc::new(program.ops.into()), Span::default())],
             constants: program.constants,
-            globals: HashMap::new(),
         }
     }
 
@@ -125,18 +128,21 @@ impl<'input> VM<'input> {
                     object: Object::Null,
                     span,
                 }),
-                Op::SetGlobal(name) => {
+                Op::Bind(name) => {
                     let value = self.pop()?;
-                    self.globals.insert(name, value);
+                    self.current_frame_mut().locals.insert(name, value);
                 }
-                Op::GetGlobal { name, span } => {
-                    let Some(value) = self.globals.get(name) else {
+                Op::Get { name, span } => {
+                    let Some(value) = self.current_frame().locals.get(name) else {
                         return Err(vec![Error::Eval(EvalError {
                             span,
                             kind: ErrorKind::UndefinedVariable(name),
                         })]);
                     };
-                    self.stack.push(value.clone());
+                    self.stack.push(SpannedObject {
+                        object: value.object.clone(),
+                        span,
+                    });
                 }
                 Op::Array { size, span } => {
                     let object = self.stack.drain(size).map(|o| o.object).collect();

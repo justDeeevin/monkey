@@ -1,10 +1,15 @@
-use crate::{code::Op, object::CompiledFunction, token::Span};
-use std::rc::Rc;
+use crate::{
+    code::{Op, SpannedObject},
+    object::CompiledFunction,
+    token::Span,
+};
+use std::{collections::HashMap, rc::Rc};
 
 pub struct Frame<'a> {
-    function: Rc<CompiledFunction<'a>>,
+    pub function: Rc<CompiledFunction<'a>>,
     pub ip: usize,
     pub call_span: Span,
+    pub locals: HashMap<&'a str, SpannedObject<'a>>,
 }
 
 impl<'a> Frame<'a> {
@@ -13,6 +18,7 @@ impl<'a> Frame<'a> {
             function,
             ip: 0,
             call_span,
+            locals: HashMap::new(),
         }
     }
 

@@ -81,7 +81,7 @@ impl<'a> Compiler<'a> {
             }
             Statement::Let { name, value, .. } => {
                 self.compile_expression(value);
-                self.current_scope().ops.push(Op::SetGlobal(name.value));
+                self.current_scope().ops.push(Op::Bind(name.value));
             }
             Statement::Return { value, .. } => {
                 self.compile_expression(value);
@@ -156,7 +156,7 @@ impl<'a> Compiler<'a> {
                 self.current_scope().ops.push(Op::Null(token.span));
             }
             Expression::Identifier(name) => {
-                self.current_scope().ops.push(Op::GetGlobal {
+                self.current_scope().ops.push(Op::Get {
                     name: name.value,
                     span: name.span(),
                 });

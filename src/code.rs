@@ -22,8 +22,8 @@ pub enum Op<'a> {
     Jump(usize),
     Panic,
     Null(Span),
-    SetGlobal(&'a str),
-    GetGlobal {
+    Bind(&'a str),
+    Get {
         span: Span,
         name: &'a str,
     },

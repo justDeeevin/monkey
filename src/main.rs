@@ -6,7 +6,7 @@ use eval::Environment;
 use rustyline::error::ReadlineError;
 use vm::VM;
 
-use crate::{object::Object, token::Span, vm::frame::Frame};
+use crate::object::Object;
 
 mod ast;
 mod cli;
@@ -87,8 +87,8 @@ fn main() {
                     },
                     Backend::Vm => {
                         let program = compiler.compile(program);
-                        vm.frames
-                            .push(Frame::new(Rc::new(program.ops.into()), Span::default()));
+                        vm.frames[0].function = Rc::new(program.ops.into());
+                        vm.frames[0].ip = 0;
                         vm.constants = program.constants.clone();
                         match vm.run() {
                             Ok(eval) => eval,
