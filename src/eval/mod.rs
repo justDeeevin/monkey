@@ -320,7 +320,8 @@ impl<'a> Environment<'a> {
 
                     Ok(array.remove(index as usize))
                 }
-                Object::Map(map) => {
+                Object::Map(mut map) => {
+                    let span = index.span();
                     let index = self.eval_expression(*index, None)?;
                     if matches!(index, Object::Function { .. } | Object::Map(_)) {
                         Err(vec![Error {
@@ -328,7 +329,7 @@ impl<'a> Environment<'a> {
                             kind: ErrorKind::InvalidKey(index.into()),
                         }])
                     } else {
-                        Ok(map.get(&index).cloned().unwrap_or(Object::Null))
+                        Ok(map.remove(&index).unwrap_or(Object::Null))
                     }
                 }
                 _ => Err(vec![Error {
