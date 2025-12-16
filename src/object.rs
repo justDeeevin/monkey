@@ -63,6 +63,12 @@ impl<'a> From<HashMap<Object<'a>, Object<'a>>> for Object<'a> {
     }
 }
 
+impl<'a> FromIterator<(Object<'a>, Object<'a>)> for Object<'a> {
+    fn from_iter<T: IntoIterator<Item = (Object<'a>, Object<'a>)>>(iter: T) -> Self {
+        Self::Map(Map(iter.into_iter().collect()))
+    }
+}
+
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct Map<'a>(pub HashMap<Object<'a>, Object<'a>>);
 

@@ -5,6 +5,7 @@ use crate::{
     object::Object,
     token::Span,
 };
+use itertools::Itertools;
 use stack::Stack;
 use std::{collections::HashMap, rc::Rc};
 
@@ -137,6 +138,21 @@ impl<'input> VM<'input> {
                         object,
                         span: *span,
                     })
+                }
+                Op::Map { size, span } => {
+                    let map = self
+                        .stack
+                        .drain(size * 2)
+                        .map(|o| o.object)
+                        .tuples::<(_, _)>()
+                        .collect::<HashMap<_, _>>();
+                    if map.len() != *size {
+                        return Err(vec![Error::Underflow]);
+                    }
+                    self.stack.push(SpannedObject {
+                        object: map.into(),
+                        span: *span,
+                    });
                 }
             }
 

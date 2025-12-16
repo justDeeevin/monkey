@@ -9,3 +9,4 @@ thiserror = "2.0.11"
 strum = { version = "0.27.2", features = ["derive"] }
 ariadne = "0.6.0"
 clap = { version = "4.5.53", features = ["derive"] }
+itertools = "0.14.0"

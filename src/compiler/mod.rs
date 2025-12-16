@@ -146,6 +146,21 @@ impl<'a> Compiler<'a> {
                     span: open.span.join(close.span),
                 })
             }
+            Expression::Map {
+                elements,
+                open,
+                close,
+            } => {
+                let size = elements.len();
+                for (key, value) in elements.into_iter().rev() {
+                    self.compile_expression(value);
+                    self.compile_expression(key);
+                }
+                self.ops.push(Op::Map {
+                    size,
+                    span: open.span.join(close.span),
+                })
+            }
             _ => todo!(),
         }
     }
