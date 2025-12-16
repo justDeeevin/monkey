@@ -34,17 +34,13 @@ fn main() {
         };
         match args.backend {
             Backend::Otf => {
-                if let Err(errors) = Environment::default().eval_program(program) {
-                    for error in errors {
-                        error.report(&contents);
-                    }
+                if let Err(error) = Environment::default().eval_program(program) {
+                    error.report(&contents);
                 };
             }
             Backend::Vm => match VM::new(Compiler::default().compile(program)).run() {
-                Err(errors) => {
-                    for error in errors {
-                        error.report(&contents);
-                    }
+                Err(error) => {
+                    error.report(&contents);
                 }
                 Ok(out) if out != Object::Null => println!("{out}"),
                 Ok(_) => {}
@@ -78,10 +74,8 @@ fn main() {
                 let eval = match args.backend {
                     Backend::Otf => match env.eval_program(program) {
                         Ok(eval) => eval,
-                        Err(errors) => {
-                            for error in errors {
-                                error.report(line);
-                            }
+                        Err(error) => {
+                            error.report(line);
                             continue;
                         }
                     },
@@ -95,10 +89,8 @@ fn main() {
                         vm.constants = program.constants.clone();
                         match vm.run() {
                             Ok(eval) => eval,
-                            Err(errors) => {
-                                for error in errors {
-                                    error.report(line);
-                                }
+                            Err(error) => {
+                                error.report(line);
                                 continue;
                             }
                         }

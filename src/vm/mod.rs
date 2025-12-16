@@ -32,7 +32,7 @@ impl<'a> Error<'a> {
     }
 }
 
-pub type Result<'a, T, E = Vec<Error<'a>>> = std::result::Result<T, E>;
+pub type Result<'a, T, E = Error<'a>> = std::result::Result<T, E>;
 
 pub struct VM<'input> {
     stack: Stack<SpannedObject<'input>>,
@@ -101,13 +101,13 @@ impl<'input> VM<'input> {
                 Op::Neg(span) => {
                     let value = self.pop()?;
                     let Object::Integer(value) = value.object else {
-                        return Err(vec![Error::Eval(EvalError {
+                        return Err(Error::Eval(EvalError {
                             span: value.span,
                             kind: ErrorKind::InvalidOperand {
                                 operator: PrefixOperator::Neg,
                                 operand: value.object.into(),
                             },
-                        })]);
+                        }));
                     };
 
                     self.stack.push(SpannedObject {
@@ -144,10 +144,10 @@ impl<'input> VM<'input> {
                 }
                 Op::Get { name, span } => {
                     let Some(value) = self.current_frame().locals.get(name) else {
-                        return Err(vec![Error::Eval(EvalError {
+                        return Err(Error::Eval(EvalError {
                             span,
                             kind: ErrorKind::UndefinedVariable(name),
-                        })]);
+                        }));
                     };
                     self.stack.push(SpannedObject {
                         object: value.object.clone(),
@@ -166,7 +166,7 @@ impl<'input> VM<'input> {
                         .tuples::<(_, _)>()
                         .collect::<HashMap<_, _>>();
                     if map.len() != size {
-                        return Err(vec![Error::Underflow]);
+                        return Err(Error::Underflow);
                     }
                     self.stack.push(SpannedObject {
                         object: map.into(),
@@ -181,20 +181,20 @@ impl<'input> VM<'input> {
                             let index_span = index.span;
 
                             let Object::Integer(index) = index.object else {
-                                return Err(vec![Error::Eval(EvalError {
+                                return Err(Error::Eval(EvalError {
                                     span: index_span,
                                     kind: ErrorKind::NotAnIndex,
-                                })]);
+                                }));
                             };
 
                             if index < 0 || index >= array.len() as i64 {
-                                return Err(vec![Error::Eval(EvalError {
+                                return Err(Error::Eval(EvalError {
                                     span: index_span,
                                     kind: ErrorKind::OutOfBounds {
                                         i: index,
                                         len: array.len(),
                                     },
-                                })]);
+                                }));
                             }
 
                             array.remove(index as usize)
@@ -202,19 +202,19 @@ impl<'input> VM<'input> {
                         Object::Map(mut map) => {
                             if matches!(index.object, Object::CompiledFunction(_) | Object::Map(_))
                             {
-                                return Err(vec![Error::Eval(EvalError {
+                                return Err(Error::Eval(EvalError {
                                     span: index.span,
                                     kind: ErrorKind::InvalidKey(index.object.into()),
-                                })]);
+                                }));
                             }
 
                             map.remove(&index.object).unwrap_or(Object::Null)
                         }
                         _ => {
-                            return Err(vec![Error::Eval(EvalError {
+                            return Err(Error::Eval(EvalError {
                                 span: collection.span,
                                 kind: ErrorKind::NotACollection,
-                            })]);
+                            }));
                         }
                     };
 
@@ -226,21 +226,21 @@ impl<'input> VM<'input> {
                 } => {
                     let function = self.pop()?;
                     let Object::CompiledFunction(function) = function.object else {
-                        return Err(vec![Error::Eval(EvalError {
+                        return Err(Error::Eval(EvalError {
                             span: function.span,
                             kind: ErrorKind::NotAFunction,
-                        })]);
+                        }));
                     };
                     let params = function.params.clone();
                     let args = self.stack.drain(params.len()).collect::<Vec<_>>();
                     if args.len() != params.len() {
-                        return Err(vec![Error::Eval(EvalError {
+                        return Err(Error::Eval(EvalError {
                             span: args_span,
                             kind: ErrorKind::WrongNumberOfArguments {
                                 expected: params.len(),
                                 got: args.len(),
                             },
-                        })]);
+                        }));
                     }
                     self.frames.push(Frame::new(function, call_span));
                     for (param, value) in params.iter().rev().zip(args) {
@@ -251,7 +251,7 @@ impl<'input> VM<'input> {
                 Op::ReturnValue => {
                     let value = self.pop()?.object;
                     let Some(call_span) = self.frames.pop().map(|frame| frame.call_span) else {
-                        return Err(vec![Error::Underflow]);
+                        return Err(Error::Underflow);
                     };
                     self.stack.push(SpannedObject {
                         span: call_span,
@@ -260,7 +260,7 @@ impl<'input> VM<'input> {
                 }
                 Op::Return => {
                     let Some(call_span) = self.frames.pop().map(|frame| frame.call_span) else {
-                        return Err(vec![Error::Underflow]);
+                        return Err(Error::Underflow);
                     };
                     self.stack.push(SpannedObject {
                         object: Object::Null,
@@ -311,10 +311,10 @@ impl<'input> VM<'input> {
             }
             (InfixOperator::Div, Object::Integer(left), Object::Integer(right)) => {
                 if right == 0 {
-                    return Err(vec![Error::Eval(EvalError {
+                    return Err(Error::Eval(EvalError {
                         span,
                         kind: ErrorKind::DivisionByZero,
-                    })]);
+                    }));
                 }
 
                 self.stack.push(SpannedObject {
@@ -359,7 +359,7 @@ impl<'input> VM<'input> {
     }
 
     fn pop(&mut self) -> Result<'input, SpannedObject<'input>> {
-        self.stack.pop().ok_or(vec![Error::Underflow])
+        self.stack.pop().ok_or(Error::Underflow)
     }
 }
 
@@ -369,12 +369,12 @@ fn invalid_operands<'a>(
     right: Object<'a>,
     span: Span,
 ) -> Result<'a, Rc<Object<'a>>> {
-    Err(vec![Error::Eval(EvalError {
+    Err(Error::Eval(EvalError {
         span,
         kind: ErrorKind::InvalidOperands {
             operator,
             left: left.into(),
             right: right.into(),
         },
-    })])
+    }))
 }

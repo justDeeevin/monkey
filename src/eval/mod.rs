@@ -65,7 +65,7 @@ pub enum ErrorKind<'a> {
     DivisionByZero,
 }
 
-pub type Result<'a, T, E = Vec<Error<'a>>> = std::result::Result<T, E>;
+pub type Result<'a, T, E = Error<'a>> = std::result::Result<T, E>;
 
 #[derive(Default, Debug, Clone)]
 pub struct Environment<'a> {
@@ -83,22 +83,16 @@ impl<'a> Environment<'a> {
             return Ok(Object::Null);
         }
 
-        let mut errors = Vec::new();
         let mut last = Object::Null;
 
         for statement in statements {
-            match self.eval_statement(statement) {
-                Ok(Object::Return(value)) => return Ok(*value),
-                Ok(out) => last = out,
-                Err(e) => errors.extend(e),
+            match self.eval_statement(statement)? {
+                Object::Return(value) => return Ok(*value),
+                out => last = out,
             }
         }
 
-        if !errors.is_empty() {
-            Err(errors)
-        } else {
-            Ok(last)
-        }
+        Ok(last)
     }
 
     fn eval_statement(&mut self, statement: Statement<'a>) -> Result<'a, Object<'a>> {
@@ -133,13 +127,13 @@ impl<'a> Environment<'a> {
                 )),
                 PrefixOperator::Neg => match self.eval_expression(*operand, None)? {
                     Object::Integer(i) => Ok((-i).into()),
-                    e => Err(vec![Error {
+                    e => Err(Error {
                         span,
                         kind: ErrorKind::InvalidOperand {
                             operator,
                             operand: e.into(),
                         },
-                    }]),
+                    }),
                 },
             },
             Expression::Infix {
@@ -166,10 +160,10 @@ impl<'a> Environment<'a> {
                     }
                     (InfixOperator::Div, Object::Integer(left), Object::Integer(right)) => {
                         if right == 0 {
-                            Err(vec![Error {
+                            Err(Error {
                                 span,
                                 kind: ErrorKind::DivisionByZero,
-                            }])
+                            })
                         } else {
                             Ok((left / right).into())
                         }
@@ -192,14 +186,14 @@ impl<'a> Environment<'a> {
                     {
                         Ok(Object::Boolean(left != right))
                     }
-                    (operator, left, right) => Err(vec![Error {
+                    (operator, left, right) => Err(Error {
                         span,
                         kind: ErrorKind::InvalidOperands {
                             operator,
                             left: left.into(),
                             right: right.into(),
                         },
-                    }]),
+                    }),
                 }
             }
             Expression::If {
@@ -217,11 +211,9 @@ impl<'a> Environment<'a> {
                 }
             }
             Expression::Identifier(Identifier { value, token }) => {
-                self.find_variable(value).ok_or_else(|| {
-                    vec![Error {
-                        span: token.span,
-                        kind: ErrorKind::UndefinedVariable(value),
-                    }]
+                self.find_variable(value).ok_or(Error {
+                    span: token.span,
+                    kind: ErrorKind::UndefinedVariable(value),
                 })
             }
             Expression::Function {
@@ -255,20 +247,20 @@ impl<'a> Environment<'a> {
                 }
 
                 let Object::Function(function) = self.eval_expression(*function, None)? else {
-                    return Err(vec![Error {
+                    return Err(Error {
                         span,
                         kind: ErrorKind::NotAFunction,
-                    }]);
+                    });
                 };
 
                 if arguments.len() != function.parameters.len() {
-                    return Err(vec![Error {
+                    return Err(Error {
                         span: args_span,
                         kind: ErrorKind::WrongNumberOfArguments {
                             expected: function.parameters.len(),
                             got: arguments.len(),
                         },
-                    }]);
+                    });
                 }
 
                 let mut call_env = function.env.clone();
@@ -302,20 +294,20 @@ impl<'a> Environment<'a> {
                     let span = index.span();
 
                     let Object::Integer(index) = self.eval_expression(*index, None)? else {
-                        return Err(vec![Error {
+                        return Err(Error {
                             span,
                             kind: ErrorKind::NotAnIndex,
-                        }]);
+                        });
                     };
 
                     if index < 0 || index >= array.len() as i64 {
-                        return Err(vec![Error {
+                        return Err(Error {
                             span,
                             kind: ErrorKind::OutOfBounds {
                                 i: index,
                                 len: array.len(),
                             },
-                        }]);
+                        });
                     }
 
                     Ok(array.remove(index as usize))
@@ -324,18 +316,18 @@ impl<'a> Environment<'a> {
                     let span = index.span();
                     let index = self.eval_expression(*index, None)?;
                     if matches!(index, Object::Function { .. } | Object::Map(_)) {
-                        Err(vec![Error {
+                        Err(Error {
                             span,
                             kind: ErrorKind::InvalidKey(index.into()),
-                        }])
+                        })
                     } else {
                         Ok(map.remove(&index).unwrap_or(Object::Null))
                     }
                 }
-                _ => Err(vec![Error {
+                _ => Err(Error {
                     span,
                     kind: ErrorKind::NotACollection,
-                }]),
+                }),
             },
             Expression::Map { elements, .. } => {
                 let mut map = Map::default();
@@ -344,10 +336,10 @@ impl<'a> Environment<'a> {
                     let key_span = key.span();
                     let key = self.eval_expression(key, None)?;
                     if matches!(key, Object::Function { .. } | Object::Map(_)) {
-                        return Err(vec![Error {
+                        return Err(Error {
                             span: key_span,
                             kind: ErrorKind::InvalidKey(key.into()),
-                        }]);
+                        });
                     }
                     map.insert(key, self.eval_expression(value, None)?);
                 }

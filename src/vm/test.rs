@@ -10,13 +10,8 @@ fn integer_arithmetic() {
 fn check(cases: &[(&str, Object)]) {
     for (input, expected) in cases {
         match VM::new(get_program(input)).run() {
-            Err(errors) => {
-                panic!(
-                    "failed to run program:{}",
-                    errors
-                        .into_iter()
-                        .fold(String::new(), |acc, e| format!("{acc}\n{e}"))
-                );
+            Err(e) => {
+                panic!("failed to run program: {e}",);
             }
             Ok(out) => assert_eq!(out, *expected),
         }

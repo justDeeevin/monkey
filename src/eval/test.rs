@@ -3,14 +3,7 @@ use crate::{eval::Environment, object::Object};
 fn test_eval(input: &str) -> Object<'_> {
     Environment::default()
         .eval_program(crate::parser::test::get_program(input))
-        .unwrap_or_else(|errors| {
-            panic!(
-                "failed to evaluate program:{}",
-                errors
-                    .into_iter()
-                    .fold(String::new(), |acc, e| format!("{acc}\n{e}"))
-            )
-        })
+        .unwrap_or_else(|e| panic!("failed to evaluate program: {e}",))
 }
 
 #[test]

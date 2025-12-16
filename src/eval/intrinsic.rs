@@ -25,13 +25,13 @@ fn print<'a>(args: &[Object<'a>], _args_span: Span) -> Result<'a, Object<'a>> {
 
 fn len<'a>(args: &[Object<'a>], args_span: Span) -> Result<'a, Object<'a>> {
     let [arg] = args else {
-        return Err(vec![Error {
+        return Err(Error {
             span: args_span,
             kind: ErrorKind::WrongNumberOfArguments {
                 expected: 1,
                 got: args.len(),
             },
-        }]);
+        });
     };
 
     let arg_span = Span {
@@ -47,28 +47,28 @@ fn len<'a>(args: &[Object<'a>], args_span: Span) -> Result<'a, Object<'a>> {
     match arg {
         Object::Array(a) => {
             if a.len() > i64::MAX as usize {
-                Err(vec![too_long_error])
+                Err(too_long_error)
             } else {
                 Ok(Object::Integer(a.len() as i64))
             }
         }
         Object::Map(m) => {
             if m.len() > i64::MAX as usize {
-                Err(vec![too_long_error])
+                Err(too_long_error)
             } else {
                 Ok(Object::Integer(m.len() as i64))
             }
         }
         Object::String(s) => {
             if s.len() > i64::MAX as usize {
-                Err(vec![too_long_error])
+                Err(too_long_error)
             } else {
                 Ok(Object::Integer(s.len() as i64))
             }
         }
-        arg => Err(vec![Error {
+        arg => Err(Error {
             span: arg_span,
             kind: ErrorKind::BadTypeForLen(arg.into()),
-        }]),
+        }),
     }
 }
