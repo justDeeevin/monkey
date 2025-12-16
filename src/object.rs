@@ -39,6 +39,12 @@ impl From<String> for Object<'_> {
     }
 }
 
+impl From<&str> for Object<'_> {
+    fn from(value: &str) -> Self {
+        Self::String(value.to_string())
+    }
+}
+
 impl<'a> From<Vec<Object<'a>>> for Object<'a> {
     fn from(a: Vec<Object<'a>>) -> Self {
         Self::Array(a)

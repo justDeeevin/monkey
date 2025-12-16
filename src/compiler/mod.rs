@@ -125,6 +125,13 @@ impl<'a> Compiler<'a> {
                     span: name.span(),
                 });
             }
+            Expression::String { value, token } => {
+                self.constants.push(SpannedObject {
+                    object: value.into(),
+                    span: token.span,
+                });
+                self.ops.push(Op::Constant(self.constants.len() - 1));
+            }
             _ => todo!(),
         }
     }
