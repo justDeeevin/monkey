@@ -98,7 +98,7 @@ impl std::fmt::Display for TokenKind {
 impl TokenKind {
     pub const fn prefix_parse<'a>(
         self,
-    ) -> Option<fn(&mut Parser<'a>, Token<'a>) -> parser::Result<'a, Expression<'a>>> {
+    ) -> Option<fn(&mut Parser<'a>, Token<'a>) -> parser::Result<Expression<'a>>> {
         match self {
             Self::Ident => Some(Parser::parse_identifier),
             Self::Int => Some(Parser::parse_integer),

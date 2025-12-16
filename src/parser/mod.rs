@@ -40,9 +40,11 @@ pub enum ErrorKind {
         #[source]
         std::num::ParseIntError,
     ),
+    #[error("Reserved literal `{0}`")]
+    Reserved(String),
 }
 
-pub type Result<'a, T, E = Error> = std::result::Result<T, E>;
+pub type Result<T, E = Error> = std::result::Result<T, E>;
 
 pub struct Parser<'a> {
     lexer: Lexer<'a>,
@@ -69,7 +71,7 @@ impl<'a> Parser<'a> {
         &mut self.current
     }
 
-    fn expect_next(&mut self, expected: TokenKind) -> Result<'a, Token<'a>> {
+    fn expect_next(&mut self, expected: TokenKind) -> Result<Token<'a>> {
         let input = self.lexer.input;
 
         match self.next_token().take() {
@@ -87,7 +89,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_program(mut self) -> Result<'a, Program<'a>, Vec<Error>> {
+    fn parse_program(mut self) -> Result<Program<'a>, Vec<Error>> {
         let mut statements = Vec::new();
         let mut errors = Vec::new();
 
@@ -113,7 +115,7 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn parse_statement(&mut self) -> Result<'a, Statement<'a>, Error> {
+    fn parse_statement(&mut self) -> Result<Statement<'a>, Error> {
         let Some(token) = self.current.take() else {
             return Err(Error {
                 span: Span {
@@ -138,7 +140,7 @@ impl<'a> Parser<'a> {
         Ok(out)
     }
 
-    fn parse_expression_statement(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+    fn parse_expression_statement(&mut self, token: Token<'a>) -> Result<Expression<'a>> {
         let expr = self.parse_expression(Some(token), ExpressionKind::Base)?;
 
         Ok(expr)
@@ -152,7 +154,7 @@ impl<'a> Parser<'a> {
         &mut self,
         token: Option<Token<'a>>,
         kind: ExpressionKind,
-    ) -> Result<'a, Expression<'a>> {
+    ) -> Result<Expression<'a>> {
         let Some(token) = token.or_else(|| self.next_token().take()) else {
             return Err(self.unexpected_eof());
         };
@@ -194,7 +196,7 @@ impl<'a> Parser<'a> {
         Ok(left)
     }
 
-    fn parse_index(&mut self, array: Expression<'a>) -> Result<'a, Expression<'a>> {
+    fn parse_index(&mut self, array: Expression<'a>) -> Result<Expression<'a>> {
         let index = self.parse_expression(None, ExpressionKind::Base)?;
         Ok(Expression::Index {
             collection: Box::new(array),
@@ -203,11 +205,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_call(
-        &mut self,
-        function: Expression<'a>,
-        open: Token<'a>,
-    ) -> Result<'a, Expression<'a>> {
+    fn parse_call(&mut self, function: Expression<'a>, open: Token<'a>) -> Result<Expression<'a>> {
         let arguments = self.parse_call_arguments()?;
         Ok(Expression::Call {
             open,
@@ -217,7 +215,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_call_arguments(&mut self) -> Result<'a, Vec<Expression<'a>>> {
+    fn parse_call_arguments(&mut self) -> Result<Vec<Expression<'a>>> {
         let mut arguments = Vec::new();
 
         if self.peek_is(TokenKind::RParen) {
@@ -247,15 +245,21 @@ impl<'a> Parser<'a> {
         }
     }
 
-    fn peek_expr_kind(&self) -> Result<'a, ExpressionKind> {
+    fn peek_expr_kind(&self) -> Result<ExpressionKind> {
         self.peek
             .as_ref()
             .map(|t| ExpressionKind::from(t.kind))
             .ok_or_else(|| self.unexpected_eof())
     }
 
-    fn parse_let_statement(&mut self, token: Token<'a>) -> Result<'a, Statement<'a>> {
+    fn parse_let_statement(&mut self, token: Token<'a>) -> Result<Statement<'a>> {
         let name_token = self.expect_next(TokenKind::Ident)?;
+        if crate::eval::intrinsic::lookup_intrinsic(name_token.literal).is_some() {
+            return Err(Error {
+                span: name_token.span,
+                kind: ErrorKind::Reserved(name_token.literal.to_string()),
+            });
+        }
         let name = Identifier {
             value: name_token.literal,
             token: name_token,
@@ -268,21 +272,21 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_return_statement(&mut self, token: Token<'a>) -> Result<'a, Statement<'a>> {
+    fn parse_return_statement(&mut self, token: Token<'a>) -> Result<Statement<'a>> {
         Ok(Statement::Return {
             return_token: token,
             value: self.parse_expression(None, ExpressionKind::Base)?,
         })
     }
 
-    pub fn parse_identifier(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_identifier(&mut self, token: Token<'a>) -> Result<Expression<'a>> {
         Ok(Expression::Identifier(Identifier {
             value: token.literal,
             token,
         }))
     }
 
-    pub fn parse_integer(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_integer(&mut self, token: Token<'a>) -> Result<Expression<'a>> {
         let value = match token.literal.parse() {
             Ok(value) => value,
             Err(e) => {
@@ -296,7 +300,7 @@ impl<'a> Parser<'a> {
         Ok(Expression::Integer { value, token })
     }
 
-    pub fn parse_prefix(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_prefix(&mut self, token: Token<'a>) -> Result<Expression<'a>> {
         Ok(Expression::Prefix {
             operator: match token.kind {
                 TokenKind::Not => PrefixOperator::Not,
@@ -308,11 +312,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_infix(
-        &mut self,
-        token: Token<'a>,
-        left: Expression<'a>,
-    ) -> Result<'a, Expression<'a>> {
+    fn parse_infix(&mut self, token: Token<'a>, left: Expression<'a>) -> Result<Expression<'a>> {
         let kind = ExpressionKind::from(token.kind);
         let right = self.parse_expression(None, kind)?;
         Ok(Expression::Infix {
@@ -332,7 +332,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_boolean(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_boolean(&mut self, token: Token<'a>) -> Result<Expression<'a>> {
         Ok(Expression::Boolean {
             value: match token.literal {
                 "true" => true,
@@ -343,7 +343,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_grouped_expression(&mut self, _token: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_grouped_expression(&mut self, _token: Token<'a>) -> Result<Expression<'a>> {
         let expr = self.parse_expression(None, ExpressionKind::Base)?;
 
         self.expect_next(TokenKind::RParen)?;
@@ -351,7 +351,7 @@ impl<'a> Parser<'a> {
         Ok(expr)
     }
 
-    pub fn parse_if(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_if(&mut self, token: Token<'a>) -> Result<Expression<'a>> {
         self.expect_next(TokenKind::LParen)?;
 
         let condition = self.parse_expression(None, ExpressionKind::Base)?;
@@ -376,7 +376,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_block_statement(&mut self, open: Token<'a>) -> Result<'a, BlockStatement<'a>> {
+    fn parse_block_statement(&mut self, open: Token<'a>) -> Result<BlockStatement<'a>> {
         let mut statements = Vec::new();
 
         while self
@@ -395,7 +395,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_function(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_function(&mut self, token: Token<'a>) -> Result<Expression<'a>> {
         self.expect_next(TokenKind::LParen)?;
         let parameters = self.parse_function_parameters()?;
         let lbrace = self.expect_next(TokenKind::LBrace)?;
@@ -407,18 +407,18 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_null(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_null(&mut self, token: Token<'a>) -> Result<Expression<'a>> {
         Ok(Expression::Null(token))
     }
 
-    pub fn parse_string(&mut self, token: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_string(&mut self, token: Token<'a>) -> Result<Expression<'a>> {
         Ok(Expression::String {
             value: token.literal,
             token,
         })
     }
 
-    pub fn parse_array(&mut self, open: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_array(&mut self, open: Token<'a>) -> Result<Expression<'a>> {
         let mut elements = Vec::new();
 
         if self.peek_is(TokenKind::RBracket) {
@@ -443,7 +443,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    pub fn parse_map(&mut self, open: Token<'a>) -> Result<'a, Expression<'a>> {
+    pub fn parse_map(&mut self, open: Token<'a>) -> Result<Expression<'a>> {
         let mut elements = Vec::new();
         if self.peek_is(TokenKind::RBrace) {
             return Ok(Expression::Map {
@@ -474,7 +474,7 @@ impl<'a> Parser<'a> {
         })
     }
 
-    fn parse_function_parameters(&mut self) -> Result<'a, Vec<Identifier<'a>>> {
+    fn parse_function_parameters(&mut self) -> Result<Vec<Identifier<'a>>> {
         let mut identifiers = Vec::new();
 
         if self.peek_is(TokenKind::RParen) {
@@ -503,7 +503,7 @@ impl<'a> Parser<'a> {
     }
 }
 
-pub fn parse(input: &str) -> Result<'_, Program<'_>, Vec<Error>> {
+pub fn parse(input: &str) -> Result<Program<'_>, Vec<Error>> {
     Parser::new(input).parse_program()
 }
 

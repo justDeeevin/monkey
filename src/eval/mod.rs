@@ -6,7 +6,7 @@ use crate::{
 };
 use std::{collections::HashMap, rc::Rc};
 
-mod intrinsic;
+pub mod intrinsic;
 #[cfg(test)]
 mod test;
 
