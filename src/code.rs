@@ -27,6 +27,10 @@ pub enum Op<'a> {
         span: Span,
         name: &'a str,
     },
+    Array {
+        size: usize,
+        span: Span,
+    },
 }
 
 impl PartialEq for Op<'_> {

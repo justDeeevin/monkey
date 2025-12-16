@@ -51,4 +51,26 @@ impl<T, const SIZE: usize> Stack<T, SIZE> {
             Some(unsafe { self.data[self.top - 1].assume_init_ref() })
         }
     }
+
+    pub fn drain(&mut self, n: usize) -> Drain<'_, T, SIZE> {
+        Drain { stack: self, n }
+    }
+}
+
+pub struct Drain<'a, T, const SIZE: usize> {
+    stack: &'a mut Stack<T, SIZE>,
+    n: usize,
+}
+
+impl<'a, T, const SIZE: usize> Iterator for Drain<'a, T, SIZE> {
+    type Item = T;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        if self.n == 0 {
+            None
+        } else {
+            self.n -= 1;
+            self.stack.pop()
+        }
+    }
 }

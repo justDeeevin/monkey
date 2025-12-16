@@ -132,6 +132,20 @@ impl<'a> Compiler<'a> {
                 });
                 self.ops.push(Op::Constant(self.constants.len() - 1));
             }
+            Expression::Array {
+                elements,
+                open,
+                close,
+            } => {
+                let size = elements.len();
+                for element in elements.into_iter().rev() {
+                    self.compile_expression(element);
+                }
+                self.ops.push(Op::Array {
+                    size,
+                    span: open.span.join(close.span),
+                })
+            }
             _ => todo!(),
         }
     }

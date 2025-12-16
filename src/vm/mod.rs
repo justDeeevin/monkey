@@ -131,6 +131,13 @@ impl<'input> VM<'input> {
                     };
                     self.stack.push(value.object.clone());
                 }
+                Op::Array { size, span } => {
+                    let object = self.stack.drain(*size).map(|o| o.object).collect();
+                    self.stack.push(SpannedObject {
+                        object,
+                        span: *span,
+                    })
+                }
             }
 
             i += 1;

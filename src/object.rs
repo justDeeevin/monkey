@@ -51,6 +51,12 @@ impl<'a> From<Vec<Object<'a>>> for Object<'a> {
     }
 }
 
+impl<'a> FromIterator<Object<'a>> for Object<'a> {
+    fn from_iter<T: IntoIterator<Item = Object<'a>>>(iter: T) -> Self {
+        Self::Array(iter.into_iter().collect())
+    }
+}
+
 impl<'a> From<HashMap<Object<'a>, Object<'a>>> for Object<'a> {
     fn from(m: HashMap<Object<'a>, Object<'a>>) -> Self {
         Self::Map(Map(m))
