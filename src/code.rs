@@ -3,7 +3,7 @@ use std::rc::Rc;
 
 #[derive(Debug, strum::EnumDiscriminants, Clone, Copy)]
 #[strum_discriminants(name(OpKind))]
-pub enum Op {
+pub enum Op<'a> {
     /// Push a constant at the given index onto the stack.
     Constant(usize),
     True(Span),
@@ -22,17 +22,22 @@ pub enum Op {
     Jump(usize),
     Panic,
     Null(Span),
+    SetGlobal(&'a str),
+    GetGlobal {
+        span: Span,
+        name: &'a str,
+    },
 }
 
-impl PartialEq for Op {
+impl PartialEq for Op<'_> {
     fn eq(&self, other: &Self) -> bool {
         OpKind::from(self) == OpKind::from(other)
     }
 }
 
-impl Eq for Op {}
+impl Eq for Op<'_> {}
 
-impl From<InfixOperator> for Op {
+impl From<InfixOperator> for Op<'_> {
     fn from(value: InfixOperator) -> Self {
         match value {
             InfixOperator::Add => Op::Add,
@@ -46,7 +51,7 @@ impl From<InfixOperator> for Op {
     }
 }
 
-impl TryFrom<Op> for InfixOperator {
+impl TryFrom<Op<'_>> for InfixOperator {
     type Error = ();
 
     fn try_from(value: Op) -> Result<Self, Self::Error> {
@@ -81,8 +86,21 @@ impl PartialEq<Object<'_>> for SpannedObject<'_> {
     }
 }
 
+impl Eq for SpannedObject<'_> {}
+
 #[derive(Debug)]
+pub struct ScopedObject<'a> {
+    pub object: SpannedObject<'a>,
+    pub scope: Scope,
+}
+
+#[derive(Debug)]
+pub enum Scope {
+    Global,
+}
+
+#[derive(Debug, Default)]
 pub struct Program<'a> {
-    pub ops: Rc<[Op]>,
+    pub ops: Rc<[Op<'a>]>,
     pub constants: Rc<[SpannedObject<'a>]>,
 }

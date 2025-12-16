@@ -1,6 +1,6 @@
 use crate::{
     ast::{InfixOperator, PrefixOperator},
-    code::{Op, Program, SpannedObject},
+    code::{Op, Program, Scope, ScopedObject, SpannedObject},
     eval::{Error as EvalError, ErrorKind},
     object::Object,
     token::Span,
@@ -31,9 +31,11 @@ impl<'a> Error<'a> {
 
 pub type Result<'a, T, E = Vec<Error<'a>>> = std::result::Result<T, E>;
 
+#[derive(Default)]
 pub struct VM<'input> {
     stack: Stack<SpannedObject<'input>>,
-    program: Program<'input>,
+    pub program: Program<'input>,
+    symbols: HashMap<&'input str, ScopedObject<'input>>,
 }
 
 impl<'input> VM<'input> {
@@ -41,10 +43,11 @@ impl<'input> VM<'input> {
         Self {
             stack: Stack::default(),
             program,
+            symbols: HashMap::new(),
         }
     }
 
-    pub fn run(mut self) -> Result<'input, Object<'input>> {
+    pub fn run(&mut self) -> Result<'input, Object<'input>> {
         let mut i = 0;
         while let Some(op) = self.program.ops.get(i) {
             match op {
@@ -108,6 +111,26 @@ impl<'input> VM<'input> {
                     object: Object::Null,
                     span: *span,
                 }),
+                Op::SetGlobal(name) => {
+                    let name = *name;
+                    let value = self.pop()?;
+                    self.symbols.insert(
+                        name,
+                        ScopedObject {
+                            object: value,
+                            scope: Scope::Global,
+                        },
+                    );
+                }
+                Op::GetGlobal { name, span } => {
+                    let Some(value) = self.symbols.get(name) else {
+                        return Err(vec![Error::Eval(EvalError {
+                            span: *span,
+                            kind: ErrorKind::UndefinedVariable(name),
+                        })]);
+                    };
+                    self.stack.push(value.object.clone());
+                }
             }
 
             i += 1;

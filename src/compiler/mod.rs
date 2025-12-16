@@ -1,5 +1,7 @@
 use crate::{
-    ast::{Expression, InfixOperator, Node, PrefixOperator, Program as Ast, Statement},
+    ast::{
+        Expression, InfixOperator, Node, PrefixOperator, Program as Ast, Statement, StatementKind,
+    },
     code::{Op, Program, SpannedObject},
 };
 
@@ -9,7 +11,7 @@ pub mod test;
 #[derive(Default)]
 pub struct Compiler<'a> {
     constants: Vec<SpannedObject<'a>>,
-    ops: Vec<Op>,
+    ops: Vec<Op<'a>>,
 }
 
 impl<'a> Compiler<'a> {
@@ -25,11 +27,12 @@ impl<'a> Compiler<'a> {
     }
 
     fn compile_statements(&mut self, statements: Vec<Statement<'a>>) {
-        let empty = statements.is_empty();
+        let mut last_kind = None;
         for statement in statements {
+            last_kind = Some(StatementKind::from(&statement));
             self.compile_statement(statement);
         }
-        if !empty {
+        if last_kind != Some(StatementKind::Let) {
             self.ops.pop();
         }
     }
@@ -39,6 +42,10 @@ impl<'a> Compiler<'a> {
             Statement::Expression(expr) => {
                 self.compile_expression(expr);
                 self.ops.push(Op::Pop)
+            }
+            Statement::Let { name, value, .. } => {
+                self.compile_expression(value);
+                self.ops.push(Op::SetGlobal(name.value));
             }
             _ => todo!(),
         }
@@ -111,6 +118,12 @@ impl<'a> Compiler<'a> {
             }
             Expression::Null(token) => {
                 self.ops.push(Op::Null(token.span));
+            }
+            Expression::Identifier(name) => {
+                self.ops.push(Op::GetGlobal {
+                    name: name.value,
+                    span: name.span(),
+                });
             }
             _ => todo!(),
         }

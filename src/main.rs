@@ -52,6 +52,7 @@ fn main() {
     let mut rl = rustyline::DefaultEditor::new().unwrap();
 
     let mut env = Environment::default();
+    let mut vm = VM::default();
 
     loop {
         match rl.readline(">> ") {
@@ -77,15 +78,18 @@ fn main() {
                             continue;
                         }
                     },
-                    Backend::Vm => match VM::new(Compiler::compile(program)).run() {
-                        Ok(eval) => eval,
-                        Err(errors) => {
-                            for error in errors {
-                                error.report(line);
+                    Backend::Vm => {
+                        vm.program = Compiler::compile(program);
+                        match vm.run() {
+                            Ok(eval) => eval,
+                            Err(errors) => {
+                                for error in errors {
+                                    error.report(line);
+                                }
+                                continue;
                             }
-                            continue;
                         }
-                    },
+                    }
                 };
                 println!("{eval}");
             }
