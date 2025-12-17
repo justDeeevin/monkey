@@ -267,6 +267,30 @@ impl<'input> VM<'input> {
                         span: call_span,
                     });
                 }
+                Op::Intrinsic {
+                    function,
+                    n_args,
+                    call_span,
+                } => {
+                    let args = self
+                        .stack
+                        .drain(n_args)
+                        .map(|s| s.object)
+                        .collect::<Vec<_>>()
+                        .into_iter()
+                        .rev()
+                        .collect::<Vec<_>>();
+                    if args.len() != n_args {
+                        return Err(Error::Underflow);
+                    }
+                    match function(&args, call_span) {
+                        Ok(value) => self.stack.push(SpannedObject {
+                            object: value,
+                            span: call_span,
+                        }),
+                        Err(e) => return Err(Error::Eval(e)),
+                    }
+                }
             }
 
             self.current_frame_mut().ip += 1;

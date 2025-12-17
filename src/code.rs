@@ -1,4 +1,4 @@
-use crate::{ast::InfixOperator, object::Object, token::Span};
+use crate::{ast::InfixOperator, intrinsic::Intrinsic, object::Object, token::Span};
 use std::rc::Rc;
 
 #[derive(Debug, strum::EnumDiscriminants, Clone, Copy)]
@@ -42,6 +42,11 @@ pub enum Op<'a> {
     },
     ReturnValue,
     Return,
+    Intrinsic {
+        function: Intrinsic<'a>,
+        n_args: usize,
+        call_span: Span,
+    },
 }
 
 impl PartialEq for Op<'_> {
@@ -95,8 +100,8 @@ impl PartialEq for SpannedObject<'_> {
     }
 }
 
-impl PartialEq<Object<'_>> for SpannedObject<'_> {
-    fn eq(&self, other: &Object<'_>) -> bool {
+impl<'a> PartialEq<Object<'a>> for SpannedObject<'a> {
+    fn eq(&self, other: &Object<'a>) -> bool {
         self.object.eq(other)
     }
 }

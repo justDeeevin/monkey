@@ -3,6 +3,7 @@ use crate::{
         Expression, InfixOperator, Node, PrefixOperator, Program as Ast, Statement, StatementKind,
     },
     code::{Op, Program, SpannedObject},
+    intrinsic::lookup_intrinsic,
     object::{CompiledFunction, Object},
     token::Span,
 };
@@ -227,8 +228,19 @@ impl<'a> Compiler<'a> {
                 open,
             } => {
                 let span = function.span().join(close.span);
+                let n_args = arguments.len();
                 for argument in arguments {
                     self.compile_expression(argument);
+                }
+                if let Expression::Identifier(id) = function.as_ref()
+                    && let Some(function) = lookup_intrinsic(id.value)
+                {
+                    self.current_scope().ops.push(Op::Intrinsic {
+                        function,
+                        n_args,
+                        call_span: span,
+                    });
+                    return;
                 }
                 self.compile_expression(*function);
                 self.current_scope().ops.push(Op::Call {

@@ -7,7 +7,7 @@ fn integer_arithmetic() {
     check(&tests);
 }
 
-fn check(cases: &[(&str, Object)]) {
+fn check<'a>(cases: &[(&'a str, Object<'a>)]) {
     for (input, expected) in cases {
         match VM::new(get_program(input)).run() {
             Err(e) => {

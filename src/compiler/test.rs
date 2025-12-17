@@ -16,7 +16,7 @@ fn integer_arithmetic() {
     check(&tests);
 }
 
-fn check(cases: &[(&str, &[Object], &[Op])]) {
+fn check<'a>(cases: &[(&'a str, &[Object<'a>], &[Op<'a>])]) {
     for (input, expected_constants, expected_ops) in cases {
         let program = get_program(input);
         assert_eq!(program.constants.as_ref(), *expected_constants);

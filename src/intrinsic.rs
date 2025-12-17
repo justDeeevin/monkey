@@ -4,10 +4,9 @@ use crate::{
     token::Span,
 };
 
-#[allow(clippy::type_complexity, reason = "idc")]
-pub fn lookup_intrinsic<'a>(
-    name: &'a str,
-) -> Option<fn(&[Object<'a>], Span) -> Result<'a, Object<'a>>> {
+pub type Intrinsic<'a> = fn(&[Object<'a>], Span) -> Result<'a, Object<'a>>;
+
+pub fn lookup_intrinsic<'a>(name: &'a str) -> Option<Intrinsic<'a>> {
     match name {
         "print" => Some(print),
         "len" => Some(len),
