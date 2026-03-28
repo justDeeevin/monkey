@@ -6,15 +6,6 @@ use std::path::PathBuf;
 pub struct Args {
     #[arg()]
     pub file: Option<PathBuf>,
-    #[arg(long, default_value_t = Backend::Vm)]
-    pub backend: Backend,
-}
-
-#[derive(clap::ValueEnum, strum::Display, Clone, Copy)]
-#[strum(serialize_all = "kebab-case")]
-pub enum Backend {
-    Vm,
-    Otf,
 }
 
 pub fn parse() -> Args {
