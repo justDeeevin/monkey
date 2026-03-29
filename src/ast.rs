@@ -1,4 +1,8 @@
-use std::fmt::{Debug, Display};
+use std::{
+    fmt::{Debug, Display},
+    hash::Hash,
+};
+use strum::Display;
 
 #[derive(Default, Clone, Copy)]
 pub struct Span {
@@ -57,7 +61,8 @@ pub trait Spanned {
     fn span(&self) -> Span;
 }
 
-pub trait Node: Spanned + Display + Debug {}
+#[allow(unused)]
+trait Node: Spanned + Display + Debug + Clone {}
 
 fn write_indent(f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
     const INDENT: &str = "  ";
@@ -71,10 +76,24 @@ trait DisplayIndented {
     fn fmt_indented(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result;
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Identifier<'a> {
     pub name: &'a str,
     pub span: Span,
+}
+
+impl PartialEq for Identifier<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.name == other.name
+    }
+}
+
+impl Eq for Identifier<'_> {}
+
+impl Hash for Identifier<'_> {
+    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
+        self.name.hash(state)
+    }
 }
 
 impl Spanned for Identifier<'_> {
@@ -91,7 +110,7 @@ impl Display for Identifier<'_> {
 
 impl Node for Identifier<'_> {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Statement<'a> {
     Let {
         let_span: Span,
@@ -102,7 +121,10 @@ pub enum Statement<'a> {
         return_span: Span,
         value: Expression<'a>,
     },
-    Expression(Expression<'a>),
+    Expression {
+        value: Expression<'a>,
+        semi: bool,
+    },
 }
 
 impl Spanned for Statement<'_> {
@@ -112,7 +134,7 @@ impl Spanned for Statement<'_> {
                 let_span, value, ..
             } => let_span.join(value.span()),
             Self::Return { return_span, value } => return_span.join(value.span()),
-            Self::Expression(expr) => expr.span(),
+            Self::Expression { value, .. } => value.span(),
         }
     }
 }
@@ -120,9 +142,12 @@ impl Spanned for Statement<'_> {
 impl DisplayIndented for Statement<'_> {
     fn fmt_indented(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         match self {
-            Self::Let { name, value, .. } => write!(f, "let {name} = {value}"),
-            Self::Return { value, .. } => write!(f, "return {value}"),
-            Self::Expression(expr) => expr.fmt_indented(f, indent),
+            Self::Let { name, value, .. } => write!(f, "let {name} = {value};"),
+            Self::Return { value, .. } => write!(f, "return {value};"),
+            Self::Expression { value, semi } => {
+                value.fmt_indented(f, indent)?;
+                if *semi { write!(f, ";") } else { Ok(()) }
+            }
         }
     }
 }
@@ -135,7 +160,7 @@ impl Display for Statement<'_> {
 
 impl Node for Statement<'_> {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Block<'a> {
     pub open_span: Span,
     pub statements: Vec<Statement<'a>>,
@@ -169,7 +194,7 @@ impl Display for Block<'_> {
 
 impl Node for Block<'_> {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Expression<'a> {
     Identifier(Identifier<'a>),
     Integer {
@@ -385,7 +410,7 @@ impl Display for Expression<'_> {
 
 impl Node for Expression<'_> {}
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Prefix {
     pub span: Span,
     pub operator: PrefixOperator,
@@ -393,44 +418,36 @@ pub struct Prefix {
 
 impl Display for Prefix {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self.operator {
-            PrefixOperator::Neg => write!(f, "-"),
-            PrefixOperator::Not => write!(f, "!"),
-        }
+        Display::fmt(&self.operator, f)
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Display, Clone)]
 pub enum PrefixOperator {
+    #[strum(to_string = "-")]
     Neg,
+    #[strum(to_string = "!")]
     Not,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, Display)]
 pub enum InfixOperator {
+    #[strum(to_string = "+")]
     Add,
+    #[strum(to_string = "-")]
     Sub,
+    #[strum(to_string = "*")]
     Mul,
+    #[strum(to_string = "/")]
     Div,
+    #[strum(to_string = "==")]
     Eq,
+    #[strum(to_string = "!=")]
     Neq,
+    #[strum(to_string = "<")]
     LT,
+    #[strum(to_string = ">")]
     GT,
-}
-
-impl Display for InfixOperator {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            InfixOperator::Add => write!(f, "+"),
-            InfixOperator::Sub => write!(f, "-"),
-            InfixOperator::Mul => write!(f, "*"),
-            InfixOperator::Div => write!(f, "/"),
-            InfixOperator::Eq => write!(f, "=="),
-            InfixOperator::Neq => write!(f, "!="),
-            InfixOperator::LT => write!(f, "<"),
-            InfixOperator::GT => write!(f, ">"),
-        }
-    }
 }
 
 impl InfixOperator {

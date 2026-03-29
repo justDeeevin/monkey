@@ -12,6 +12,7 @@ clap = { version = "4.6.0", features = ["derive"] }
 nom = "8.0.0"
 nom_locate = "5.0.0"
 nom-tracable = { git = "https://github.com/justdeeevin/nom-tracable", branch = "nom-8" }
+strum = { version = "0.28.0", features = ["derive"] }
 
 [features]
 trace = ["nom-tracable/trace"]
