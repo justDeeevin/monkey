@@ -1,15 +1,15 @@
 pub use crate::ast::*;
 use nom::{
+    IResult, Parser,
     branch::alt,
     bytes::complete::{is_not, tag, take_while, take_while_m_n},
-    character::complete::{char, digit1, multispace0, multispace1, satisfy},
-    combinator::{opt, recognize, value, verify},
+    character::complete::{char, digit1, line_ending, multispace0, multispace1, satisfy},
+    combinator::{eof, opt, peek, recognize, value, verify},
     multi::{fold, separated_list0},
     sequence::{delimited, preceded, separated_pair, terminated},
-    IResult, Parser,
 };
 use nom_locate::LocatedSpan;
-use nom_tracable::{tracable_parser, TracableInfo};
+use nom_tracable::{TracableInfo, tracable_parser};
 
 type InputSpan<'a> = LocatedSpan<&'a str, TracableInfo>;
 
@@ -64,12 +64,15 @@ fn parse_statements(input: InputSpan) -> IResult<InputSpan, Vec<Statement>> {
 
 #[tracable_parser]
 fn parse_statement(input: InputSpan) -> IResult<InputSpan, Statement> {
-    alt((
-        parse_return,
-        parse_let,
-        (parse_expression, opt(char(';')).map(|v| v.is_some()))
-            .map(|(value, semi)| Statement::Expression { value, semi }),
-    ))
+    terminated(
+        alt((
+            parse_return,
+            parse_let,
+            (parse_expression, opt(peek(char(';'))).map(|v| v.is_some()))
+                .map(|(value, semi)| Statement::Expression { value, semi }),
+        )),
+        alt((tag(";"), line_ending, eof)),
+    )
     .parse(input)
 }
 
@@ -78,7 +81,7 @@ fn parse_let(input: InputSpan) -> IResult<InputSpan, Statement> {
     (
         spanned_tag("let"),
         surround_ws(parse_identifier),
-        delimited(char('='), surround_ws(parse_expression), opt(char(';'))),
+        preceded(char('='), surround_ws(parse_expression)),
     )
         .map(|(let_span, name, value)| Statement::Let {
             let_span,
@@ -175,12 +178,9 @@ fn parse_identifier(input: InputSpan) -> IResult<InputSpan, Identifier> {
 
 #[tracable_parser]
 fn parse_return(input: InputSpan) -> IResult<InputSpan, Statement> {
-    terminated(
-        separated_pair(spanned_tag("return"), multispace0, parse_expression),
-        opt(char(';')),
-    )
-    .map(|(return_span, value)| Statement::Return { return_span, value })
-    .parse(input)
+    separated_pair(spanned_tag("return"), multispace0, parse_expression)
+        .map(|(return_span, value)| Statement::Return { return_span, value })
+        .parse(input)
 }
 
 #[tracable_parser]
