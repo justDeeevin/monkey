@@ -16,9 +16,10 @@ fn main() {
         let contents = std::fs::read_to_string(file).unwrap();
         let program = parse_program(&contents).unwrap();
         eprintln!("{program}");
-        match Environment::default().eval(program).unwrap() {
-            Value::Null => {}
-            value => println!("{value}"),
+        match Environment::default().eval(program) {
+            Err(e) => e.report(&contents),
+            Ok(Value::Null) => {}
+            Ok(value) => println!("{value}"),
         }
         return;
     }
@@ -33,8 +34,15 @@ fn main() {
         match rl.readline(">> ") {
             Ok(line) => {
                 let _ = rl.add_history_entry(&line);
-                let program = parse_program(line.leak().trim()).unwrap();
-                let value = env.eval(program).unwrap();
+                let line = line.leak().trim();
+                let program = parse_program(line).unwrap();
+                let value = match env.eval(program) {
+                    Ok(value) => value,
+                    Err(e) => {
+                        e.report(line);
+                        continue;
+                    }
+                };
                 println!("{value}");
             }
             Err(ReadlineError::Eof) => {

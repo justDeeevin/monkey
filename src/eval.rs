@@ -28,6 +28,42 @@ pub enum ErrorKind<'a> {
     IndexOutOfBounds { len: usize, index: i64 },
     #[error("cannot index {0} with {1}")]
     InvalidIndex(Type, Type),
+    #[error("cannot use {0} as a map key")]
+    InvalidMapKey(Type),
+}
+
+impl ErrorKind<'_> {
+    pub fn note(&self) -> Option<String> {
+        match self {
+            Self::InvalidNeg(_) => Some("Only integers can be negated".to_string()),
+            Self::IndexOutOfBounds { index: ..0, .. } => {
+                Some("Index cannot be negative".to_string())
+            }
+            Self::InvalidMapKey(_) => {
+                Some("Only strings, integers, and booleans can be map keys".to_string())
+            }
+            _ => None,
+        }
+    }
+}
+
+impl Error<'_> {
+    pub fn report(&self, input: &str) {
+        use ariadne::{Color, Label, Report, ReportKind, Source};
+
+        let mut builder = Report::build(ReportKind::Error, self.span)
+            .with_message(&self.kind)
+            .with_label(Label::new(self.span).with_color(Color::Red));
+
+        if let Some(note) = self.kind.note() {
+            builder = builder.with_note(note);
+        }
+
+        builder
+            .finish()
+            .eprint(("input", Source::from(input)))
+            .unwrap();
+    }
 }
 
 #[derive(Default)]
@@ -218,7 +254,18 @@ impl<'a> Environment<'a> {
                 elements
                     .into_iter()
                     .map(|(key, value)| {
-                        let key = self.eval_expression(key, None)?;
+                        let key_span = key.span();
+                        let key = match self.eval_expression(key, None)? {
+                            key @ Value::String(_) | key @ Value::Int(_) | key @ Value::Bool(_) => {
+                                key
+                            }
+                            key => {
+                                return Err(Error {
+                                    span: key_span,
+                                    kind: ErrorKind::InvalidMapKey(key.into()),
+                                });
+                            }
+                        };
                         let value = self.eval_expression(value, None)?;
                         Ok((key, value))
                     })

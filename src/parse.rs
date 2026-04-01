@@ -15,7 +15,7 @@ type InputSpan<'a> = LocatedSpan<&'a str, TracableInfo>;
 
 impl Spanned for InputSpan<'_> {
     fn span(&self) -> Span {
-        (self.location_offset()..self.len()).into()
+        (self.location_offset()..(self.location_offset() + self.len())).into()
     }
 }
 
@@ -243,7 +243,7 @@ fn parse_boolean(input: InputSpan) -> IResult<InputSpan, Expression> {
 #[tracable_parser]
 fn parse_if(input: InputSpan) -> IResult<InputSpan, Expression> {
     (
-        tag::<_, InputSpan, _>("if"),
+        spanned_tag("if"),
         delimited(
             multispace0,
             delimited(char('('), parse_expression.map(Box::new), char(')')),
@@ -257,7 +257,7 @@ fn parse_if(input: InputSpan) -> IResult<InputSpan, Expression> {
     )
         .map(
             |(if_span, condition, consequence, alternative)| Expression::If {
-                if_span: if_span.span(),
+                if_span,
                 condition,
                 consequence,
                 alternative,

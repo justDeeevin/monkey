@@ -20,10 +20,10 @@ impl Span {
 }
 
 impl ariadne::Span for Span {
-    type SourceId = ();
+    type SourceId = &'static str;
 
     fn source(&self) -> &Self::SourceId {
-        &()
+        &"input"
     }
 
     fn start(&self) -> usize {
@@ -49,8 +49,8 @@ impl<T: std::ops::RangeBounds<usize>> From<T> for Span {
             std::ops::Bound::Unbounded => 0,
         };
         let end = match value.end_bound() {
-            std::ops::Bound::Included(end) => *end,
-            std::ops::Bound::Excluded(end) => *end - 1,
+            std::ops::Bound::Included(end) => *end + 1,
+            std::ops::Bound::Excluded(end) => *end,
             std::ops::Bound::Unbounded => usize::MAX,
         };
         Self { start, end }
