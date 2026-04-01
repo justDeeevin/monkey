@@ -81,7 +81,7 @@ fn parse_let(input: InputSpan) -> IResult<InputSpan, Statement> {
     (
         spanned_tag("let"),
         surround_ws(parse_identifier),
-        preceded(char('='), surround_ws(parse_expression)),
+        preceded(surround_ws(char('=')), parse_expression),
     )
         .map(|(let_span, name, value)| Statement::Let {
             let_span,
