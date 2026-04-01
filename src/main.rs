@@ -5,8 +5,8 @@ mod intrinsic;
 mod parse;
 mod value;
 
-use eval::Environment;
-use parse::parse_program;
+use eval::{Environment, Error};
+use parse::{parse_program, report_errors};
 use rustyline::error::ReadlineError;
 use value::Value;
 
@@ -14,10 +14,17 @@ fn main() {
     let args = cli::parse();
     if let Some(file) = args.file {
         let contents = std::fs::read_to_string(file).unwrap();
-        let program = parse_program(&contents).unwrap();
+        let parse_result = parse_program(&contents);
+        if parse_result.has_errors() {
+            report_errors(parse_result.into_errors(), &contents);
+            return;
+        }
+        let Some(program) = parse_result.into_output() else {
+            return;
+        };
         eprintln!("{program}");
         match Environment::default().eval(program) {
-            Err(e) => e.report(&contents),
+            Err(e) => Error::report(e, &contents),
             Ok(Value::Null) => {}
             Ok(value) => println!("{value}"),
         }
@@ -35,11 +42,18 @@ fn main() {
             Ok(line) => {
                 let _ = rl.add_history_entry(&line);
                 let line = line.leak().trim();
-                let program = parse_program(line).unwrap();
+                let parse_result = parse_program(line);
+                if parse_result.has_errors() {
+                    report_errors(parse_result.into_errors(), line);
+                    continue;
+                }
+                let Some(program) = parse_result.into_output() else {
+                    continue;
+                };
                 let value = match env.eval(program) {
                     Ok(value) => value,
                     Err(e) => {
-                        e.report(line);
+                        Error::report(e, line);
                         continue;
                     }
                 };

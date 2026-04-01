@@ -1,19 +1,14 @@
+use chumsky::span::{SimpleSpan, SpanWrap, Spanned};
+
 use crate::{ast::*, intrinsic::find_intrinsic, value::*};
 use std::{collections::HashMap, rc::Rc};
 
-pub type Result<'a, T, E = Error<'a>> = std::result::Result<T, E>;
+pub type Result<'a, T, E = Spanned<Error<'a>>> = std::result::Result<T, E>;
 
 #[derive(thiserror::Error, Debug)]
-#[error("{kind}")]
-pub struct Error<'a> {
-    pub span: Span,
-    pub kind: ErrorKind<'a>,
-}
-
-#[derive(thiserror::Error, Debug)]
-pub enum ErrorKind<'a> {
+pub enum Error<'a> {
     #[error("unknown identifier: {0}")]
-    UnknownIdentifier(Identifier<'a>),
+    UnknownIdentifier(&'a str),
     #[error("cannot negate {0}")]
     InvalidNeg(Type),
     #[error("cannot use {0} on {1} and {2}")]
@@ -32,43 +27,36 @@ pub enum ErrorKind<'a> {
     InvalidMapKey(Type),
 }
 
-impl ErrorKind<'_> {
-    pub fn note(&self) -> Option<String> {
+impl Error<'_> {
+    pub fn note(&self) -> Option<&'static str> {
         match self {
-            Self::InvalidNeg(_) => Some("Only integers can be negated".to_string()),
-            Self::IndexOutOfBounds { index: ..0, .. } => {
-                Some("Index cannot be negative".to_string())
-            }
-            Self::InvalidMapKey(_) => {
-                Some("Only strings, integers, and booleans can be map keys".to_string())
-            }
+            Self::InvalidNeg(_) => Some("Only integers can be negated"),
+            Self::IndexOutOfBounds { index: ..0, .. } => Some("Index cannot be negative"),
+            Self::InvalidMapKey(_) => Some("Only strings, integers, and booleans can be map keys"),
             _ => None,
         }
     }
 }
 
 impl Error<'_> {
-    pub fn report(&self, input: &str) {
+    pub fn report(error: Spanned<Self>, input: &str) {
         use ariadne::{Color, Label, Report, ReportKind, Source};
 
-        let mut builder = Report::build(ReportKind::Error, self.span)
-            .with_message(&self.kind)
-            .with_label(Label::new(self.span).with_color(Color::Red));
+        let mut builder = Report::build(ReportKind::Error, error.span.into_range())
+            .with_message(&error.inner)
+            .with_label(Label::new(error.span.into_range()).with_color(Color::Red));
 
-        if let Some(note) = self.kind.note() {
+        if let Some(note) = error.inner.note() {
             builder = builder.with_note(note);
         }
 
-        builder
-            .finish()
-            .eprint(("input", Source::from(input)))
-            .unwrap();
+        builder.finish().eprint(Source::from(input)).unwrap();
     }
 }
 
 #[derive(Default)]
 pub struct Environment<'a> {
-    pub locals: HashMap<Identifier<'a>, Value<'a>>,
+    pub locals: HashMap<&'a str, Value<'a>>,
 }
 
 impl<'a> Environment<'a> {
@@ -76,7 +64,10 @@ impl<'a> Environment<'a> {
         self.eval_statements(program.statements)
     }
 
-    fn eval_statements(&mut self, statements: Vec<Statement<'a>>) -> Result<'a, Value<'a>> {
+    fn eval_statements(
+        &mut self,
+        statements: Vec<Spanned<Statement<'a>>>,
+    ) -> Result<'a, Value<'a>> {
         for statement in statements {
             if let Some(ret) = self.eval_statement(statement)? {
                 return Ok(ret);
@@ -86,14 +77,17 @@ impl<'a> Environment<'a> {
         Ok(Value::Null)
     }
 
-    fn eval_statement(&mut self, statement: Statement<'a>) -> Result<'a, Option<Value<'a>>> {
-        match statement {
+    fn eval_statement(
+        &mut self,
+        statement: Spanned<Statement<'a>>,
+    ) -> Result<'a, Option<Value<'a>>> {
+        match statement.inner {
             Statement::Let { name, value, .. } => {
-                let value = self.eval_expression(value, Some(name.clone()))?;
-                self.locals.insert(name, value);
+                let value = self.eval_expression(value, Some(name))?;
+                self.locals.insert(&name, value);
                 Ok(None)
             }
-            Statement::Return { value, .. } | Statement::Expression { value, semi: false } => {
+            Statement::Return(value) | Statement::Expression { value, semi: false } => {
                 self.eval_expression(value, None).map(Some)
             }
             Statement::Expression { value, .. } => {
@@ -105,25 +99,24 @@ impl<'a> Environment<'a> {
 
     fn eval_expression(
         &mut self,
-        expression: Expression<'a>,
-        name: Option<Identifier<'a>>,
+        expression: Spanned<Expression<'a>>,
+        name: Option<Spanned<&'a str>>,
     ) -> Result<'a, Value<'a>> {
-        let span = expression.span();
-        match expression {
-            Expression::Identifier(ident) => self.locals.get(&ident).cloned().ok_or(Error {
-                span,
-                kind: ErrorKind::UnknownIdentifier(ident),
-            }),
-            Expression::Integer { value, .. } => Ok(Value::Int(value)),
+        match expression.inner {
+            Expression::Identifier(ident) => self
+                .locals
+                .get(&ident)
+                .cloned()
+                .ok_or(Error::UnknownIdentifier(ident).with_span(expression.span)),
+            Expression::Integer(value) => Ok(Value::Int(value)),
             Expression::Prefix { prefix, right } => {
                 let right = self.eval_expression(*right, None)?;
-                match (prefix.operator, right) {
+                match (prefix, right) {
                     (PrefixOperator::Neg, Value::Int(value)) => Ok(Value::Int(-value)),
                     (PrefixOperator::Not, right) => Ok(Value::Bool(!right.truthy())),
-                    (PrefixOperator::Neg, right) => Err(Error {
-                        span,
-                        kind: ErrorKind::InvalidNeg(right.into()),
-                    }),
+                    (PrefixOperator::Neg, right) => {
+                        Err(Error::InvalidNeg(right.into()).with_span(expression.span))
+                    }
                 }
             }
             Expression::Infix {
@@ -143,21 +136,19 @@ impl<'a> Environment<'a> {
                         InfixOperator::Div => Ok(Value::Int(l / r)),
                         InfixOperator::LT => Ok(Value::Bool(l < r)),
                         InfixOperator::GT => Ok(Value::Bool(l > r)),
-                        _ => Err(Error {
-                            span,
-                            kind: ErrorKind::InvalidInfix(operator, Type::Int, Type::Int),
-                        }),
+                        _ => Err(Error::InvalidInfix(operator, Type::Int, Type::Int)
+                            .with_span(expression.span)),
                     },
                     (Value::String(l), InfixOperator::Add, Value::String(r)) => {
                         Ok(Value::String(l + &r))
                     }
-                    (left, _, right) => Err(Error {
-                        span,
-                        kind: ErrorKind::InvalidInfix(operator, left.into(), right.into()),
-                    }),
+                    (left, _, right) => {
+                        Err(Error::InvalidInfix(operator, left.into(), right.into())
+                            .with_span(expression.span))
+                    }
                 }
             }
-            Expression::Boolean { value, .. } => Ok(Value::Bool(value)),
+            Expression::Boolean(value) => Ok(Value::Bool(value)),
             Expression::If {
                 condition,
                 consequence,
@@ -166,56 +157,57 @@ impl<'a> Environment<'a> {
             } => {
                 let condition = self.eval_expression(*condition, None)?;
                 if condition.truthy() {
-                    self.eval_statements(consequence.statements)
+                    self.eval_statements(consequence.inner.statements)
                 } else if let Some(alternative) = alternative {
-                    self.eval_statements(alternative.statements)
+                    self.eval_statements(alternative.inner.statements)
                 } else {
                     Ok(Value::Null)
                 }
             }
             Expression::Function {
                 parameters, body, ..
-            } => Ok(Value::Function(Rc::new(Function {
-                name,
-                parameters,
-                body,
-            }))),
+            } => Ok(Value::Function(Rc::new(
+                Function {
+                    name,
+                    parameters,
+                    body,
+                }
+                .with_span(expression.span),
+            ))),
             Expression::Call {
                 function,
                 arguments,
                 ..
             } => {
-                if let Expression::Identifier(ident) = function.as_ref()
-                    && let Some(intrinsic) = find_intrinsic(ident.name)
+                if let Expression::Identifier(ident) = function.inner
+                    && let Some(intrinsic) = find_intrinsic(ident)
                 {
                     return intrinsic(
-                        span,
+                        expression.span,
                         arguments
                             .into_iter()
                             .map(|arg| self.eval_expression(arg, None))
                             .collect::<Result<_>>()?,
                     );
                 }
-                let function = match self.eval_expression(*function, None)? {
-                    Value::Function(function) => function,
-                    value => {
-                        return Err(Error {
-                            span,
-                            kind: ErrorKind::NonFunction(value.into()),
-                        });
-                    }
-                };
+                let function =
+                    match self.eval_expression(function.inner.with_span(function.span), None)? {
+                        Value::Function(function) => function,
+                        value => {
+                            return Err(Error::NonFunction(value.into()).with_span(expression.span));
+                        }
+                    };
 
                 let arguments = arguments
                     .into_iter()
                     .map(|arg| self.eval_expression(arg, None))
                     .collect::<Result<_>>()?;
 
-                self.invoke(span, function, arguments)
+                self.invoke(expression.span, function, arguments)
             }
-            Expression::Null(_) => Ok(Value::Null),
-            Expression::String { value, .. } => Ok(Value::String(value)),
-            Expression::Array { elements, .. } => Ok(Value::Array(
+            Expression::Null => Ok(Value::Null),
+            Expression::String(value) => Ok(Value::String(value)),
+            Expression::Array(elements) => Ok(Value::Array(
                 elements
                     .into_iter()
                     .map(|e| self.eval_expression(e, None))
@@ -229,13 +221,11 @@ impl<'a> Environment<'a> {
                 match (collection, index) {
                     (Value::Array(array), Value::Int(index)) => {
                         if index < 0 || index as usize >= array.len() {
-                            Err(Error {
-                                span,
-                                kind: ErrorKind::IndexOutOfBounds {
-                                    len: array.len(),
-                                    index,
-                                },
-                            })
+                            Err(Error::IndexOutOfBounds {
+                                len: array.len(),
+                                index,
+                            }
+                            .with_span(expression.span))
                         } else {
                             Ok(array[index as usize].clone())
                         }
@@ -244,26 +234,23 @@ impl<'a> Environment<'a> {
                         Value::Map(map),
                         index @ Value::String(_) | index @ Value::Int(_) | index @ Value::Bool(_),
                     ) => Ok(map.get(&index).cloned().unwrap_or(Value::Null)),
-                    (collection, index) => Err(Error {
-                        span,
-                        kind: ErrorKind::InvalidIndex(collection.into(), index.into()),
-                    }),
+                    (collection, index) => {
+                        Err(Error::InvalidIndex(collection.into(), index.into())
+                            .with_span(expression.span))
+                    }
                 }
             }
-            Expression::Map { elements, .. } => Ok(Value::Map(
+            Expression::Map(elements) => Ok(Value::Map(
                 elements
                     .into_iter()
                     .map(|(key, value)| {
-                        let key_span = key.span();
+                        let key_span = key.span;
                         let key = match self.eval_expression(key, None)? {
                             key @ Value::String(_) | key @ Value::Int(_) | key @ Value::Bool(_) => {
                                 key
                             }
                             key => {
-                                return Err(Error {
-                                    span: key_span,
-                                    kind: ErrorKind::InvalidMapKey(key.into()),
-                                });
+                                return Err(Error::InvalidMapKey(key.into()).with_span(key_span));
                             }
                         };
                         let value = self.eval_expression(value, None)?;
@@ -275,19 +262,17 @@ impl<'a> Environment<'a> {
     }
 
     fn invoke(
-        &mut self,
-        call_span: Span,
-        function: Rc<Function<'a>>,
+        &self,
+        call_span: SimpleSpan,
+        function: Rc<Spanned<Function<'a>>>,
         arguments: Vec<Value<'a>>,
     ) -> Result<'a, Value<'a>> {
         if arguments.len() != function.parameters.len() {
-            return Err(Error {
-                span: call_span,
-                kind: ErrorKind::WrongNumberOfArguments {
-                    expected: function.parameters.len(),
-                    found: arguments.len(),
-                },
-            });
+            return Err(Error::WrongNumberOfArguments {
+                expected: function.parameters.len(),
+                found: arguments.len(),
+            }
+            .with_span(call_span));
         }
         let mut inner = Environment::default();
 
@@ -295,7 +280,7 @@ impl<'a> Environment<'a> {
         inner
             .locals
             .extend(function.parameters.iter().cloned().zip(arguments));
-        if let Some(name) = function.name.clone()
+        if let Some(name) = function.name
             && !inner.locals.contains_key(&name)
         {
             inner.locals.insert(name, Value::Function(function.clone()));

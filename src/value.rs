@@ -1,4 +1,5 @@
-use crate::ast::{Block, Identifier};
+use crate::ast::Block;
+use chumsky::span::Spanned;
 use std::{collections::HashMap, fmt::Display, hash::Hash, rc::Rc};
 use strum::{Display, EnumDiscriminants};
 
@@ -11,7 +12,7 @@ pub enum Value<'a> {
     Array(Vec<Self>),
     Map(HashMap<Self, Self>),
     Null,
-    Function(Rc<Function<'a>>),
+    Function(Rc<Spanned<Function<'a>>>),
 }
 
 impl Display for Value<'_> {
@@ -19,7 +20,7 @@ impl Display for Value<'_> {
         match self {
             Self::Int(i) => i.fmt(f),
             Self::Bool(b) => b.fmt(f),
-            Self::String(s) => s.fmt(f),
+            Self::String(s) => std::fmt::Debug::fmt(s, f),
             Self::Array(a) => f.debug_list().entries(a.iter().map(DebugDisplay)).finish(),
             Self::Map(m) => f
                 .debug_map()
@@ -54,9 +55,9 @@ impl Value<'_> {
 }
 
 pub struct Function<'a> {
-    pub name: Option<Identifier<'a>>,
-    pub parameters: Vec<Identifier<'a>>,
-    pub body: Block<'a>,
+    pub name: Option<Spanned<&'a str>>,
+    pub parameters: Vec<Spanned<&'a str>>,
+    pub body: Spanned<Block<'a>>,
 }
 
 impl Hash for Value<'_> {

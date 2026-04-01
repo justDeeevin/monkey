@@ -1,68 +1,6 @@
-use std::{
-    fmt::{Debug, Display},
-    hash::Hash,
-};
+use chumsky::span::Spanned;
+use std::fmt::{Debug, Display};
 use strum::Display;
-
-#[derive(Default, Clone, Copy)]
-pub struct Span {
-    pub start: usize,
-    pub end: usize,
-}
-
-impl Span {
-    pub fn join(self, other: Span) -> Span {
-        Self {
-            start: self.start.min(other.start),
-            end: self.end.max(other.end),
-        }
-    }
-}
-
-impl ariadne::Span for Span {
-    type SourceId = &'static str;
-
-    fn source(&self) -> &Self::SourceId {
-        &"input"
-    }
-
-    fn start(&self) -> usize {
-        self.start
-    }
-
-    fn end(&self) -> usize {
-        self.end
-    }
-}
-
-impl std::fmt::Debug for Span {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}..{}", self.start, self.end)
-    }
-}
-
-impl<T: std::ops::RangeBounds<usize>> From<T> for Span {
-    fn from(value: T) -> Self {
-        let start = match value.start_bound() {
-            std::ops::Bound::Included(start) => *start,
-            std::ops::Bound::Excluded(start) => *start + 1,
-            std::ops::Bound::Unbounded => 0,
-        };
-        let end = match value.end_bound() {
-            std::ops::Bound::Included(end) => *end + 1,
-            std::ops::Bound::Excluded(end) => *end,
-            std::ops::Bound::Unbounded => usize::MAX,
-        };
-        Self { start, end }
-    }
-}
-
-pub trait Spanned {
-    fn span(&self) -> Span;
-}
-
-#[allow(unused)]
-trait Node: Spanned + Display + Debug + Clone {}
 
 fn write_indent(f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
     const INDENT: &str = "  ";
@@ -77,73 +15,27 @@ trait DisplayIndented {
 }
 
 #[derive(Debug, Clone)]
-pub struct Identifier<'a> {
-    pub name: &'a str,
-    pub span: Span,
-}
-
-impl PartialEq for Identifier<'_> {
-    fn eq(&self, other: &Self) -> bool {
-        self.name == other.name
-    }
-}
-
-impl Eq for Identifier<'_> {}
-
-impl Hash for Identifier<'_> {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.name.hash(state)
-    }
-}
-
-impl Spanned for Identifier<'_> {
-    fn span(&self) -> Span {
-        self.span
-    }
-}
-
-impl Display for Identifier<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.name)
-    }
-}
-
-impl Node for Identifier<'_> {}
-
-#[derive(Debug, Clone)]
 pub enum Statement<'a> {
     Let {
-        let_span: Span,
-        name: Identifier<'a>,
-        value: Expression<'a>,
+        name: Spanned<&'a str>,
+        value: Spanned<Expression<'a>>,
     },
-    Return {
-        return_span: Span,
-        value: Expression<'a>,
-    },
+    Return(Spanned<Expression<'a>>),
     Expression {
-        value: Expression<'a>,
+        value: Spanned<Expression<'a>>,
         semi: bool,
     },
-}
-
-impl Spanned for Statement<'_> {
-    fn span(&self) -> Span {
-        match self {
-            Self::Let {
-                let_span, value, ..
-            } => let_span.join(value.span()),
-            Self::Return { return_span, value } => return_span.join(value.span()),
-            Self::Expression { value, .. } => value.span(),
-        }
-    }
 }
 
 impl DisplayIndented for Statement<'_> {
     fn fmt_indented(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         match self {
-            Self::Let { name, value, .. } => write!(f, "let {name} = {value};"),
-            Self::Return { value, .. } => write!(f, "return {value};"),
+            Self::Let {
+                name: Spanned { inner: name, .. },
+                value: Spanned { inner: value, .. },
+                ..
+            } => write!(f, "let {name} = {value};"),
+            Self::Return(Spanned { inner: value, .. }) => write!(f, "return {value};"),
             Self::Expression { value, semi } => {
                 value.fmt_indented(f, indent)?;
                 if *semi { write!(f, ";") } else { Ok(()) }
@@ -158,19 +50,9 @@ impl Display for Statement<'_> {
     }
 }
 
-impl Node for Statement<'_> {}
-
 #[derive(Debug, Clone)]
 pub struct Block<'a> {
-    pub open_span: Span,
-    pub statements: Vec<Statement<'a>>,
-    pub close_span: Span,
-}
-
-impl Spanned for Block<'_> {
-    fn span(&self) -> Span {
-        self.open_span.join(self.close_span)
-    }
+    pub statements: Vec<Spanned<Statement<'a>>>,
 }
 
 impl DisplayIndented for Block<'_> {
@@ -192,117 +74,50 @@ impl Display for Block<'_> {
     }
 }
 
-impl Node for Block<'_> {}
-
 #[derive(Debug, Clone)]
 pub enum Expression<'a> {
-    Identifier(Identifier<'a>),
-    Integer {
-        span: Span,
-        value: i64,
-    },
+    Identifier(&'a str),
+    Integer(i64),
     Prefix {
-        prefix: Prefix,
-        right: Box<Self>,
+        prefix: PrefixOperator,
+        right: Box<Spanned<Self>>,
     },
     Infix {
-        left: Box<Self>,
+        left: Box<Spanned<Self>>,
         operator: InfixOperator,
-        right: Box<Self>,
+        right: Box<Spanned<Self>>,
     },
-    Boolean {
-        span: Span,
-        value: bool,
-    },
+    Boolean(bool),
     If {
-        if_span: Span,
-        condition: Box<Self>,
-        consequence: Block<'a>,
-        alternative: Option<Block<'a>>,
+        condition: Box<Spanned<Self>>,
+        consequence: Spanned<Block<'a>>,
+        alternative: Option<Spanned<Block<'a>>>,
     },
     Function {
-        fn_span: Span,
-        parameters: Vec<Identifier<'a>>,
-        body: Block<'a>,
+        parameters: Vec<Spanned<&'a str>>,
+        body: Spanned<Block<'a>>,
     },
     Call {
-        function: Box<Self>,
-        arguments: Vec<Self>,
-        close_span: Span,
+        function: Box<Spanned<Self>>,
+        arguments: Vec<Spanned<Self>>,
     },
-    Null(Span),
-    String {
-        span: Span,
-        value: String,
-    },
-    Array {
-        open_span: Span,
-        elements: Vec<Self>,
-        close_span: Span,
-    },
+    Null,
+    String(String),
+    Array(Vec<Spanned<Self>>),
     Index {
-        collection: Box<Self>,
-        index: Box<Self>,
-        close_span: Span,
+        collection: Box<Spanned<Self>>,
+        index: Box<Spanned<Self>>,
     },
-    Map {
-        open_span: Span,
-        elements: Vec<(Self, Self)>,
-        close_span: Span,
-    },
-}
-
-impl Spanned for Expression<'_> {
-    fn span(&self) -> Span {
-        match self {
-            Self::Identifier(ident) => ident.span(),
-            Self::Integer { span, .. } => *span,
-            Self::Prefix {
-                prefix: operator,
-                right,
-            } => operator.span.join(right.span()),
-            Self::Infix { left, right, .. } => left.span().join(right.span()),
-            Self::Boolean { span, .. } => *span,
-            Self::If {
-                if_span,
-                consequence,
-                alternative,
-                ..
-            } => if_span.join(alternative.as_ref().unwrap_or(consequence).span()),
-            Self::Function { fn_span, body, .. } => fn_span.join(body.span()),
-            Self::Call {
-                function,
-                close_span,
-                ..
-            } => function.span().join(*close_span),
-            Self::Null(span) => *span,
-            Self::String { span, .. } => *span,
-            Self::Array {
-                open_span,
-                close_span,
-                ..
-            } => open_span.join(*close_span),
-            Self::Index {
-                collection,
-                close_span,
-                ..
-            } => collection.span().join(*close_span),
-            Self::Map {
-                open_span,
-                close_span,
-                ..
-            } => open_span.join(*close_span),
-        }
-    }
+    Map(Vec<(Spanned<Self>, Spanned<Self>)>),
 }
 
 impl DisplayIndented for Expression<'_> {
     fn fmt_indented(&self, f: &mut std::fmt::Formatter<'_>, indent: usize) -> std::fmt::Result {
         match self {
             Self::Identifier(ident) => Display::fmt(ident, f),
-            Self::Integer { value, .. } => Display::fmt(value, f),
+            Self::Integer(value) => Display::fmt(&value, f),
             Self::Prefix { prefix, right } => {
-                Display::fmt(prefix, f)?;
+                Display::fmt(&prefix, f)?;
                 right.fmt_indented(f, indent)
             }
             Self::Infix {
@@ -316,7 +131,7 @@ impl DisplayIndented for Expression<'_> {
                 right.fmt_indented(f, indent)?;
                 write!(f, ")")
             }
-            Self::Boolean { value, .. } => write!(f, "{value}"),
+            Self::Boolean(value) => Display::fmt(&value, f),
             Self::If {
                 condition,
                 consequence,
@@ -339,13 +154,10 @@ impl DisplayIndented for Expression<'_> {
                 write!(
                     f,
                     "fn({}",
-                    parameters
-                        .first()
-                        .map(ToString::to_string)
-                        .unwrap_or_default()
+                    parameters.first().map(|v| v.inner).unwrap_or_default()
                 )?;
                 for parameter in parameters.iter().skip(1) {
-                    write!(f, ", {parameter}")?;
+                    write!(f, ", {}", parameter.inner)?;
                 }
                 write!(f, ") ")?;
                 body.fmt_indented(f, indent)
@@ -366,9 +178,9 @@ impl DisplayIndented for Expression<'_> {
                 }
                 write!(f, ")")
             }
-            Self::Null(_) => write!(f, "null"),
-            Self::String { value, .. } => write!(f, "{value:?}"),
-            Self::Array { elements, .. } => {
+            Self::Null => write!(f, "null"),
+            Self::String(value) => write!(f, "{value:?}"),
+            Self::Array(elements) => {
                 write!(f, "[")?;
                 if let Some(first) = elements.first() {
                     first.fmt_indented(f, indent)?;
@@ -387,7 +199,7 @@ impl DisplayIndented for Expression<'_> {
                 index.fmt_indented(f, indent)?;
                 write!(f, "]")
             }
-            Self::Map { elements, .. } => {
+            Self::Map(elements) => {
                 writeln!(f, "{{")?;
                 for (key, value) in elements.iter() {
                     write_indent(f, indent + 1)?;
@@ -405,20 +217,6 @@ impl DisplayIndented for Expression<'_> {
 impl Display for Expression<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.fmt_indented(f, 0)
-    }
-}
-
-impl Node for Expression<'_> {}
-
-#[derive(Debug, Clone)]
-pub struct Prefix {
-    pub span: Span,
-    pub operator: PrefixOperator,
-}
-
-impl Display for Prefix {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        Display::fmt(&self.operator, f)
     }
 }
 
@@ -450,36 +248,15 @@ pub enum InfixOperator {
     GT,
 }
 
-impl InfixOperator {
-    pub fn precedence(&self) -> (u8, u8) {
-        match self {
-            Self::Eq | Self::Neq => (1, 2),
-            Self::LT | Self::GT => (3, 4),
-            Self::Add | Self::Sub => (5, 6),
-            Self::Mul | Self::Div => (7, 8),
-        }
-    }
-}
-
 #[derive(Debug)]
 pub struct Program<'a> {
-    pub statements: Vec<Statement<'a>>,
-}
-
-impl Spanned for Program<'_> {
-    fn span(&self) -> Span {
-        self.statements
-            .first()
-            .map(Spanned::span)
-            .and_then(|span| Some(span.join(self.statements.last()?.span())))
-            .unwrap_or_default()
-    }
+    pub statements: Vec<Spanned<Statement<'a>>>,
 }
 
 impl Display for Program<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         for statement in &self.statements {
-            writeln!(f, "{statement}")?;
+            writeln!(f, "{}", statement.inner)?;
         }
         Ok(())
     }

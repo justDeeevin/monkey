@@ -1,432 +1,441 @@
 pub use crate::ast::*;
-use nom::{
-    IResult, Parser,
-    branch::alt,
-    bytes::complete::{is_not, tag, take_while, take_while_m_n},
-    character::complete::{char, digit1, line_ending, multispace0, multispace1, satisfy},
-    combinator::{eof, opt, peek, recognize, value, verify},
-    multi::{fold, separated_list0},
-    sequence::{delimited, preceded, separated_pair, terminated},
+use chumsky::{
+    IterParser, ParseResult, Parser,
+    error::Rich,
+    extra::Err,
+    pratt::{infix, left, postfix, prefix},
+    prelude::{any, none_of},
+    primitive::{choice, group, just},
+    recursive::recursive,
+    span::{Span, SpanWrap, Spanned},
+    text::{inline_whitespace, int, newline, whitespace},
 };
-use nom_locate::LocatedSpan;
-use nom_tracable::{TracableInfo, tracable_parser};
 
-type InputSpan<'a> = LocatedSpan<&'a str, TracableInfo>;
+pub fn parse_program(input: &str) -> ParseResult<Program<'_>, Rich<'_, char>> {
+    let parser = parse_statements(parse_expression()).map(|statements| Program { statements });
 
-impl Spanned for InputSpan<'_> {
-    fn span(&self) -> Span {
-        (self.location_offset()..(self.location_offset() + self.len())).into()
-    }
-}
-
-fn spanned_tag<
-    T: nom::Input + Clone,
-    I: nom::Input + nom::Compare<T> + Spanned,
-    Error: nom::error::ParseError<I>,
->(
-    tag: T,
-) -> impl Parser<I, Output = Span, Error = Error> {
-    nom::bytes::complete::tag(tag).map(|v| Spanned::span(&v))
-}
-
-fn surround_ws<I: Clone + nom::Input, E: nom::error::ParseError<I>, O>(
-    f: impl Parser<I, Output = O, Error = E>,
-) -> impl Parser<I, Output = O, Error = E>
-where
-    I::Item: nom::AsChar,
-{
-    delimited(multispace0, f, multispace0)
-}
-
-/// Comma-separated list with optional trailing comma and surrounding whitespace
-fn csl<I: Clone + nom::Input, E: nom::error::ParseError<I>, F: Parser<I, Error = E>>(
-    f: F,
-) -> impl Parser<I, Output = Vec<F::Output>, Error = E>
-where
-    I::Item: nom::AsChar,
-{
-    terminated(
-        separated_list0(surround_ws(char(',')), f),
-        opt(surround_ws(char(','))),
-    )
-}
-
-pub fn parse_program(input: &str) -> Result<Program<'_>, nom::Err<nom::error::Error<&str>>> {
-    parse_statements(InputSpan::new_extra(input, TracableInfo::default()))
-        .map(|(_, statements)| Program { statements })
-        .map_err(|e| e.map_input(InputSpan::into_fragment))
-}
-
-#[tracable_parser]
-fn parse_statements(input: InputSpan) -> IResult<InputSpan, Vec<Statement>> {
-    separated_list0(multispace0, parse_statement).parse(input)
-}
-
-#[tracable_parser]
-fn parse_statement(input: InputSpan) -> IResult<InputSpan, Statement> {
-    terminated(
-        alt((
-            parse_return,
-            parse_let,
-            (parse_expression, opt(peek(char(';'))).map(|v| v.is_some()))
-                .map(|(value, semi)| Statement::Expression { value, semi }),
-        )),
-        alt((tag(";"), line_ending, eof)),
-    )
-    .parse(input)
-}
-
-#[tracable_parser]
-fn parse_let(input: InputSpan) -> IResult<InputSpan, Statement> {
-    (
-        spanned_tag("let"),
-        surround_ws(parse_identifier),
-        preceded(surround_ws(char('=')), parse_expression),
-    )
-        .map(|(let_span, name, value)| Statement::Let {
-            let_span,
-            name,
-            value,
-        })
-        .parse(input)
-}
-
-#[tracable_parser]
-fn parse_expression(input: InputSpan) -> IResult<InputSpan, Expression> {
-    parse_expression_inner(input, 0)
-}
-
-fn parse_expression_inner(input: InputSpan, min_precedence: u8) -> IResult<InputSpan, Expression> {
-    let (mut input, mut lhs) = alt((
-        parse_boolean,
-        parse_null,
-        parse_function,
-        parse_if,
-        parse_identifier.map(Expression::Identifier),
-        parse_grouped,
-        parse_integer,
-        parse_prefix,
-        parse_string,
-        parse_array,
-        parse_map,
-    ))
-    .parse(input)?;
-
-    loop {
-        if let Ok((next_input, (arguments, close_span))) = parse_call_args(input) {
-            lhs = Expression::Call {
-                function: Box::new(lhs),
-                arguments,
-                close_span,
-            };
-            input = next_input;
-            continue;
-        }
-
-        if let Ok((next_input, (index, close_span))) = parse_index(input) {
-            lhs = Expression::Index {
-                collection: Box::new(lhs),
-                index,
-                close_span,
-            };
-            input = next_input;
-            continue;
-        }
-
-        let Ok((next_input, operator)) =
-            delimited(multispace0, parse_infix_operator, multispace0).parse(input)
-        else {
-            break;
-        };
-
-        let (lp, rp) = operator.precedence();
-
-        if lp < min_precedence {
-            break;
-        }
-
-        let (next_input, rhs) = parse_expression_inner(next_input, rp)?;
-
-        lhs = Expression::Infix {
-            left: Box::new(lhs),
-            operator,
-            right: Box::new(rhs),
-        };
-        input = next_input;
+    #[cfg(feature = "debug")]
+    {
+        let debug = parser.debug();
+        let _ = std::fs::write("parser.svg", debug.to_railroad_svg().to_string());
+        eprintln!("{}", debug.to_ebnf());
     }
 
-    Ok((input, lhs))
+    parser.parse(input)
 }
 
-#[tracable_parser]
-fn parse_grouped(input: InputSpan) -> IResult<InputSpan, Expression> {
-    delimited(char('('), parse_expression, char(')')).parse(input)
-}
-
-#[tracable_parser]
-fn parse_identifier(input: InputSpan) -> IResult<InputSpan, Identifier> {
-    recognize((
-        satisfy(unicode_ident::is_xid_start),
-        take_while(unicode_ident::is_xid_continue),
-    ))
-    .map(|value| Identifier {
-        span: Spanned::span(&value),
-        name: InputSpan::into_fragment(value),
-    })
-    .parse(input)
-}
-
-#[tracable_parser]
-fn parse_return(input: InputSpan) -> IResult<InputSpan, Statement> {
-    separated_pair(spanned_tag("return"), multispace0, parse_expression)
-        .map(|(return_span, value)| Statement::Return { return_span, value })
-        .parse(input)
-}
-
-#[tracable_parser]
-fn parse_integer(input: InputSpan) -> IResult<InputSpan, Expression> {
-    digit1
-        .map_res(|digits: InputSpan| {
-            digits.parse().map(|value| Expression::Integer {
-                span: digits.span(),
-                value,
-            })
-        })
-        .parse(input)
-}
-
-#[tracable_parser]
-fn parse_prefix(input: InputSpan) -> IResult<InputSpan, Expression> {
-    (parse_prefix_operator, parse_expression.map(Box::new))
-        .map(|(prefix, right)| Expression::Prefix { prefix, right })
-        .parse(input)
-}
-
-#[tracable_parser]
-fn parse_prefix_operator(input: InputSpan) -> IResult<InputSpan, Prefix> {
-    alt((
-        spanned_tag("-").map(|v| (v, PrefixOperator::Neg)),
-        spanned_tag("!").map(|v| (v, PrefixOperator::Not)),
-    ))
-    .map(|(span, operator)| Prefix { span, operator })
-    .parse(input)
-}
-
-#[tracable_parser]
-fn parse_infix_operator(input: InputSpan) -> IResult<InputSpan, InfixOperator> {
-    alt((
-        value(InfixOperator::Eq, tag("==")),
-        value(InfixOperator::Neq, tag("!=")),
-        value(InfixOperator::Add, char('+')),
-        value(InfixOperator::Sub, char('-')),
-        value(InfixOperator::Mul, char('*')),
-        value(InfixOperator::Div, char('/')),
-        value(InfixOperator::LT, char('<')),
-        value(InfixOperator::GT, char('>')),
-    ))
-    .parse(input)
-}
-
-#[tracable_parser]
-fn parse_boolean(input: InputSpan) -> IResult<InputSpan, Expression> {
-    alt((
-        tag("true").map(|v| (v, true)),
-        tag("false").map(|v| (v, false)),
-    ))
-    .map(|(v, value): (InputSpan, _)| Expression::Boolean {
-        span: v.span(),
-        value,
-    })
-    .parse(input)
-}
-
-#[tracable_parser]
-fn parse_if(input: InputSpan) -> IResult<InputSpan, Expression> {
-    (
-        spanned_tag("if"),
-        delimited(
-            multispace0,
-            delimited(char('('), parse_expression.map(Box::new), char(')')),
-            multispace0,
-        ),
-        parse_block,
-        preceded(
-            multispace0,
-            opt(preceded((tag("else"), multispace0), parse_block)),
-        ),
-    )
-        .map(
-            |(if_span, condition, consequence, alternative)| Expression::If {
-                if_span,
-                condition,
-                consequence,
-                alternative,
-            },
+fn parse_statements<'a>(
+    parse_expression: impl Parser<'a, &'a str, Spanned<Expression<'a>>, Err<Rich<'a, char>>> + Clone,
+) -> impl Parser<'a, &'a str, Vec<Spanned<Statement<'a>>>, Err<Rich<'a, char>>> + Clone {
+    parse_statement(parse_expression)
+        .spanned()
+        .padded()
+        .separated_by(
+            just(';')
+                .to(())
+                .or(inline_whitespace().ignore_then(newline())),
         )
-        .parse(input)
+        .allow_trailing()
+        .collect()
+        .labelled("statements")
 }
 
-#[tracable_parser]
-fn parse_block(input: InputSpan) -> IResult<InputSpan, Block> {
-    (
-        spanned_tag("{"),
-        delimited(multispace0, parse_statements, multispace0),
-        spanned_tag("}"),
-    )
-        .map(|(open_span, statements, close_span)| Block {
-            open_span,
-            statements,
-            close_span,
+fn parse_statement<'a>(
+    parse_expression: impl Parser<'a, &'a str, Spanned<Expression<'a>>, Err<Rich<'a, char>>> + Clone,
+) -> impl Parser<'a, &'a str, Statement<'a>, Err<Rich<'a, char>>> + Clone {
+    choice((
+        parse_return(parse_expression.clone()),
+        parse_let(parse_expression.clone()),
+        parse_expression
+            .then(just(';').rewind().or_not().map(|v| v.is_some()))
+            .map(|(value, semi)| Statement::Expression { value, semi }),
+    ))
+    .labelled("statement")
+}
+
+fn parse_return<'a>(
+    parse_expression: impl Parser<'a, &'a str, Spanned<Expression<'a>>, Err<Rich<'a, char>>> + Clone,
+) -> impl Parser<'a, &'a str, Statement<'a>, Err<Rich<'a, char>>> + Clone {
+    group((just("return"), whitespace()))
+        .ignore_then(parse_expression)
+        .map(Statement::Return)
+        .labelled("return")
+}
+
+fn parse_let<'a>(
+    parse_expression: impl Parser<'a, &'a str, Spanned<Expression<'a>>, Err<Rich<'a, char>>> + Clone,
+) -> impl Parser<'a, &'a str, Statement<'a>, Err<Rich<'a, char>>> + Clone {
+    just("let")
+        .ignore_then(parse_identifier().spanned().padded())
+        .then_ignore(just('='))
+        .then(parse_expression.padded())
+        .map(|(name, value)| Statement::Let { name, value })
+        .labelled("let")
+}
+
+fn parse_expression<'a>()
+-> impl Parser<'a, &'a str, Spanned<Expression<'a>>, Err<Rich<'a, char>>> + Clone {
+    let parse_boolean = just("true")
+        .to(true)
+        .or(just("false").to(false))
+        .labelled("boolean");
+
+    let parse_null = just("null").to(()).labelled("null");
+
+    let parse_integer = int(10).from_str::<i64>().unwrapped().labelled("integer");
+
+    recursive(|parse_expression| {
+        choice((
+            parse_expression
+                .clone()
+                .padded()
+                .delimited_by(just('('), just(')'))
+                .map(|s: Spanned<_>| s.inner),
+            parse_boolean.map(Expression::Boolean),
+            parse_null.to(Expression::Null),
+            parse_function(parse_expression.clone()),
+            parse_if(parse_expression.clone()),
+            parse_identifier().map(Expression::Identifier),
+            parse_integer.map(Expression::Integer),
+            parse_string().map(Expression::String),
+            parse_array(parse_expression.clone()).map(Expression::Array),
+            parse_map(parse_expression.clone()).map(Expression::Map),
+        ))
+        .spanned()
+        .pratt((
+            postfix(
+                5,
+                parse_expression
+                    .clone()
+                    .padded()
+                    .separated_by(just(','))
+                    .allow_trailing()
+                    .collect()
+                    .delimited_by(just('('), just(')'))
+                    .spanned()
+                    .labelled("function call"),
+                |function: Spanned<_>, arguments: Spanned<_>, _| {
+                    let span = function.span.union(arguments.span);
+                    Expression::Call {
+                        function: Box::new(function),
+                        arguments: arguments.inner,
+                    }
+                    .with_span(span)
+                },
+            ),
+            postfix(
+                5,
+                parse_expression
+                    .padded()
+                    .delimited_by(just('['), just(']'))
+                    .spanned()
+                    .labelled("index"),
+                |collection: Spanned<_>, index: Spanned<_>, _| {
+                    let span = collection.span.union(index.span);
+                    Expression::Index {
+                        collection: Box::new(collection),
+                        index: Box::new(index.inner),
+                    }
+                    .with_span(span)
+                },
+            ),
+            prefix(
+                4,
+                choice((
+                    just('-').to(PrefixOperator::Neg),
+                    just('!').to(PrefixOperator::Not),
+                ))
+                .spanned()
+                .labelled("prefix"),
+                |op: Spanned<_>, right: Spanned<_>, _| {
+                    let span = op.span.union(right.span);
+                    Expression::Prefix {
+                        prefix: op.inner,
+                        right: Box::new(right),
+                    }
+                    .with_span(span)
+                },
+            ),
+            infix(
+                left(3),
+                choice((
+                    just('*').padded().to(InfixOperator::Mul),
+                    just('/').padded().to(InfixOperator::Div),
+                ))
+                .labelled("infix"),
+                |left: Spanned<_>, operator, right: Spanned<_>, _| {
+                    let span = left.span.union(right.span);
+                    Expression::Infix {
+                        left: Box::new(left),
+                        operator,
+                        right: Box::new(right),
+                    }
+                    .with_span(span)
+                },
+            ),
+            infix(
+                left(2),
+                choice((
+                    just('+').padded().to(InfixOperator::Add),
+                    just('-').padded().to(InfixOperator::Sub),
+                ))
+                .labelled("infix"),
+                |left: Spanned<_>, operator, right: Spanned<_>, _| {
+                    let span = left.span.union(right.span);
+                    Expression::Infix {
+                        left: Box::new(left),
+                        operator,
+                        right: Box::new(right),
+                    }
+                    .with_span(span)
+                },
+            ),
+            infix(
+                left(1),
+                choice((
+                    just('<').padded().to(InfixOperator::LT),
+                    just('>').padded().to(InfixOperator::GT),
+                ))
+                .labelled("infix"),
+                |left: Spanned<_>, operator, right: Spanned<_>, _| {
+                    let span = left.span.union(right.span);
+                    Expression::Infix {
+                        left: Box::new(left),
+                        operator,
+                        right: Box::new(right),
+                    }
+                    .with_span(span)
+                },
+            ),
+            infix(
+                left(0),
+                choice((
+                    just("==").padded().to(InfixOperator::Eq),
+                    just("!=").padded().to(InfixOperator::Neq),
+                ))
+                .labelled("infix"),
+                |left: Spanned<_>, operator, right: Spanned<_>, _| {
+                    let span = left.span.union(right.span);
+                    Expression::Infix {
+                        left: Box::new(left),
+                        operator,
+                        right: Box::new(right),
+                    }
+                    .with_span(span)
+                },
+            ),
+        ))
+        .labelled("expression")
+    })
+    .labelled("expression")
+}
+
+fn parse_block<'a>(
+    parse_expression: impl Parser<'a, &'a str, Spanned<Expression<'a>>, Err<Rich<'a, char>>> + Clone,
+) -> impl Parser<'a, &'a str, Block<'a>, Err<Rich<'a, char>>> + Clone {
+    parse_statements(parse_expression)
+        .padded()
+        .delimited_by(just('{'), just('}'))
+        .map(|statements| Block { statements })
+        .labelled("block")
+}
+
+fn parse_function<'a>(
+    parse_expression: impl Parser<'a, &'a str, Spanned<Expression<'a>>, Err<Rich<'a, char>>> + Clone,
+) -> impl Parser<'a, &'a str, Expression<'a>, Err<Rich<'a, char>>> + Clone {
+    just("fn")
+        .ignore_then(
+            parse_identifier()
+                .spanned()
+                .padded()
+                .separated_by(just(','))
+                .allow_trailing()
+                .collect()
+                .delimited_by(just('('), just(')'))
+                .padded(),
+        )
+        .then(parse_block(parse_expression).spanned())
+        .map(|(parameters, body)| Expression::Function { parameters, body })
+        .labelled("function")
+}
+
+fn parse_if<'a>(
+    parse_expression: impl Parser<'a, &'a str, Spanned<Expression<'a>>, Err<Rich<'a, char>>> + Clone,
+) -> impl Parser<'a, &'a str, Expression<'a>, Err<Rich<'a, char>>> + Clone {
+    just("if")
+        .ignore_then(
+            parse_expression
+                .clone()
+                .padded()
+                .delimited_by(just('('), just(')'))
+                .padded()
+                .map(Box::new),
+        )
+        .then(parse_block(parse_expression.clone()).spanned())
+        .then(
+            just("else")
+                .padded()
+                .ignore_then(parse_block(parse_expression).spanned())
+                .or_not(),
+        )
+        .map(|((condition, consequence), alternative)| Expression::If {
+            condition,
+            consequence,
+            alternative,
         })
-        .parse(input)
+        .labelled("if")
 }
 
-#[tracable_parser]
-fn parse_function(input: InputSpan) -> IResult<InputSpan, Expression> {
-    (
-        spanned_tag("fn"),
-        delimited(
-            (char('('), multispace0),
-            csl(parse_identifier),
-            (char(')'), multispace0),
-        ),
-        multispace0,
-        parse_block,
-    )
-        .map(|(fn_span, parameters, _, body)| Expression::Function {
-            fn_span,
-            parameters,
-            body,
-        })
-        .parse(input)
+fn parse_identifier<'a>() -> impl Parser<'a, &'a str, &'a str, Err<Rich<'a, char>>> + Clone {
+    any()
+        .filter(|c| unicode_ident::is_xid_start(*c))
+        .then(
+            any()
+                .filter(|c| unicode_ident::is_xid_continue(*c))
+                .repeated(),
+        )
+        .to_slice()
+        .labelled("identifier")
 }
 
-#[tracable_parser]
-fn parse_call_args(input: InputSpan) -> IResult<InputSpan, (Vec<Expression>, Span)> {
-    (preceded(char('('), csl(parse_expression)), spanned_tag(")")).parse(input)
-}
+fn parse_string<'a>() -> impl Parser<'a, &'a str, String, Err<Rich<'a, char>>> + Clone {
+    #[derive(Clone)]
+    enum StringFragment<'a> {
+        Literal(&'a str),
+        EscapedChar(char),
+        EscapedWS,
+    }
 
-#[tracable_parser]
-fn parse_null(input: InputSpan) -> IResult<InputSpan, Expression> {
-    spanned_tag("null").map(Expression::Null).parse(input)
-}
+    let parse_literal = none_of("\"\\")
+        .repeated()
+        .to_slice()
+        .filter(|s: &&str| !s.is_empty())
+        .labelled("literal");
 
-#[tracable_parser]
-fn parse_string(input: InputSpan) -> IResult<InputSpan, Expression> {
-    (
-        spanned_tag("\""),
-        fold(0.., parse_fragment, String::new, |mut string, fragment| {
+    let parse_unicode = just('u').ignore_then(
+        int(16)
+            .repeated()
+            .at_least(1)
+            .at_most(6)
+            .delimited_by(just('{'), just('}'))
+            .to_slice()
+            .try_map(|s, span| {
+                u32::from_str_radix(s, 16)
+                    .ok()
+                    .and_then(char::from_u32)
+                    .ok_or_else(|| Rich::custom(span, "Invalid hex codepoint"))
+            })
+            .labelled("unicode"),
+    );
+    let parse_escaped_char = just('\\')
+        .ignore_then(choice((
+            parse_unicode,
+            just('n').to('\n'),
+            just('r').to('\r'),
+            just('t').to('\t'),
+            just('\\'),
+            just('"'),
+        )))
+        .labelled("escaped character");
+
+    let parse_escaped_whitespace = just('\\')
+        .ignore_then(whitespace().at_least(1).to_slice())
+        .labelled("escaped whitespace");
+
+    let parse_fragment = choice((
+        parse_literal.map(StringFragment::Literal),
+        parse_escaped_char.map(StringFragment::EscapedChar),
+        parse_escaped_whitespace.to(StringFragment::EscapedWS),
+    ));
+
+    parse_fragment
+        .repeated()
+        .fold(String::new(), |mut string, fragment| {
             match fragment {
                 StringFragment::Literal(s) => string += s,
                 StringFragment::EscapedChar(c) => string.push(c),
                 StringFragment::EscapedWS => {}
             }
             string
-        }),
-        spanned_tag("\""),
-    )
-        .map(|(open, value, close)| Expression::String {
-            span: open.join(close),
-            value,
         })
-        .parse(input)
+        .padded_by(just('"'))
+        .labelled("string")
 }
 
-#[derive(Clone)]
-enum StringFragment<'a> {
-    Literal(&'a str),
-    EscapedChar(char),
-    EscapedWS,
+fn parse_array<'a>(
+    parse_expression: impl Parser<'a, &'a str, Spanned<Expression<'a>>, Err<Rich<'a, char>>> + Clone,
+) -> impl Parser<'a, &'a str, Vec<Spanned<Expression<'a>>>, Err<Rich<'a, char>>> + Clone {
+    parse_expression
+        .padded()
+        .separated_by(just(','))
+        .allow_trailing()
+        .collect()
+        .delimited_by(just('['), just(']'))
+        .labelled("array")
 }
 
-#[tracable_parser]
-fn parse_fragment(input: InputSpan) -> IResult<InputSpan, StringFragment> {
-    alt((
-        parse_literal.map(StringFragment::Literal),
-        parse_escaped_char.map(StringFragment::EscapedChar),
-        value(StringFragment::EscapedWS, parse_escaped_whitespace),
-    ))
-    .parse(input)
+fn parse_map<'a>(
+    parse_expression: impl Parser<'a, &'a str, Spanned<Expression<'a>>, Err<Rich<'a, char>>> + Clone,
+) -> impl Parser<
+    'a,
+    &'a str,
+    Vec<(Spanned<Expression<'a>>, Spanned<Expression<'a>>)>,
+    Err<Rich<'a, char>>,
+> + Clone {
+    parse_expression
+        .clone()
+        .padded()
+        .then_ignore(just(':'))
+        .then(parse_expression.padded())
+        .separated_by(just(','))
+        .allow_trailing()
+        .collect()
+        .delimited_by(just('{'), just('}'))
+        .labelled("map")
 }
 
-#[tracable_parser]
-fn parse_literal<'a>(input: InputSpan<'a>) -> IResult<InputSpan<'a>, &'a str> {
-    verify(is_not("\"\\"), |s: &InputSpan| !s.is_empty())
-        .map(InputSpan::into_fragment)
-        .parse(input)
+pub fn report_errors(errors: Vec<Rich<'_, char>>, input: &str) {
+    use ariadne::{Color, Label, Report, ReportKind, Source};
+
+    for error in errors {
+        Report::build(ReportKind::Error, error.span().into_range())
+            .with_message(message(&error))
+            .with_label(
+                Label::new(error.span().into_range())
+                    .with_message(format!(
+                        "Unexpected {}",
+                        error
+                            .found()
+                            .map(ToString::to_string)
+                            .unwrap_or_else(|| "end of input".to_string())
+                    ))
+                    .with_color(Color::Red),
+            )
+            .finish()
+            .eprint(Source::from(input))
+            .unwrap();
+    }
 }
 
-#[tracable_parser]
-fn parse_escaped_char(input: InputSpan) -> IResult<InputSpan, char> {
-    preceded(
-        char('\\'),
-        alt((
-            parse_unicode,
-            value('\n', char('n')),
-            value('\r', char('r')),
-            value('\t', char('t')),
-            char('\\'),
-            char('"'),
-        )),
-    )
-    .parse(input)
-}
+fn message(error: &Rich<'_, char>) -> String {
+    let mut message = "Unexpected ".to_string();
+    match error.found() {
+        Some(token) => message += &token.to_string(),
+        None => message += "end of input",
+    }
 
-#[tracable_parser]
-fn parse_unicode(input: InputSpan) -> IResult<InputSpan, char> {
-    preceded(
-        char('u'),
-        delimited(
-            char('{'),
-            take_while_m_n(1, 6, |c: char| c.is_ascii_hexdigit()).map(InputSpan::into_fragment),
-            char('}'),
-        ),
-    )
-    .map_res(|hex| u32::from_str_radix(hex, 16))
-    .map_opt(std::char::from_u32)
-    .parse(input)
-}
+    if let Some((label, _)) = error.contexts().next() {
+        message += &format!(" while parsing {label}");
+    }
 
-#[tracable_parser]
-fn parse_escaped_whitespace(input: InputSpan) -> IResult<InputSpan, InputSpan> {
-    preceded(char('\\'), multispace1).parse(input)
-}
+    if error.expected().len() > 0 {
+        message += "; expected one of ";
+        message += &error.expected().next().unwrap().to_string();
+        message += &error
+            .expected()
+            .skip(1)
+            .fold(String::new(), |string, pat| format!("{string}, {pat}"));
+    }
 
-#[tracable_parser]
-fn parse_array(input: InputSpan) -> IResult<InputSpan, Expression> {
-    (spanned_tag("["), csl(parse_expression), spanned_tag("]"))
-        .map(|(open_span, elements, close_span)| Expression::Array {
-            open_span,
-            elements,
-            close_span,
-        })
-        .parse(input)
-}
-
-#[tracable_parser]
-fn parse_index(input: InputSpan) -> IResult<InputSpan, (Box<Expression>, Span)> {
-    (
-        preceded(char('['), parse_expression).map(Box::new),
-        spanned_tag("]"),
-    )
-        .parse(input)
-}
-
-#[tracable_parser]
-fn parse_map(input: InputSpan) -> IResult<InputSpan, Expression> {
-    (
-        surround_ws(spanned_tag("{")),
-        csl(separated_pair(
-            parse_expression,
-            surround_ws(char(':')),
-            parse_expression,
-        )),
-        surround_ws(spanned_tag("}")),
-    )
-        .map(|(open_span, elements, close_span)| Expression::Map {
-            open_span,
-            elements,
-            close_span,
-        })
-        .parse(input)
+    message
 }
